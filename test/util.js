@@ -1,0 +1,61 @@
+"use strict";
+const fs = require("node:fs");
+const path = require("node:path");
+const { pathToFileURL } = require("node:url");
+const { JSDOM } = require("..");
+
+exports.toFileUrl = dirname => {
+  return function (relativePath) {
+    return pathToFileURL(path.resolve(dirname, relativePath)).href;
+  };
+};
+
+exports.load = dirname => {
+  const fileCache = Object.create(null);
+
+  return function (name, options = {}) {
+    const file = path.resolve(dirname, "files/" + name + ".html");
+
+    if (!options.url) {
+      options.url = pathToFileURL(path.resolve(dirname, file)).href;
+    }
+
+    const contents = fileCache[file] || fs.readFileSync(file, "utf8");
+    const { window } = new JSDOM(contents, options);
+
+    // some of the loaded files expect these to exist
+    window.document.parent = window;
+    window.loadComplete = () => { };
+
+    fileCache[file] = contents;
+    return window.document;
+  };
+};
+
+exports.todo = (test, fn) => {
+  fn({
+    ok(value, message) {
+      test.ok(!value, "Marked as TODO: " + message);
+    }
+    // add more as needed
+  });
+};
+
+exports.injectIFrame = document => {
+  return exports.injectIFrameWithScript(document);
+};
+
+exports.injectIFrameWithScript = (document, scriptStr = "") => {
+  const iframe = document.createElement("iframe");
+  document.body.appendChild(iframe);
+
+  const scriptTag = iframe.contentWindow.document.createElement("script");
+  scriptTag.textContent = scriptStr;
+  iframe.contentWindow.document.body.appendChild(scriptTag);
+
+  return iframe;
+};
+
+exports.readTestFixture = relativePath => {
+  return fs.promises.readFile(path.resolve(__dirname, relativePath), { encoding: "utf8" });
+};

@@ -1,0 +1,418 @@
+"use strict";
+const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
+const { describe, it, before, after } = require("mocha-sugar-free");
+const { utf16fromString } = require("@exodus/bytes/utf16.js");
+const { createServer } = require("./helpers/servers.js");
+
+const { JSDOM } = require("../..");
+
+function fixturePath(fixture) {
+  return path.resolve(__dirname, "fixtures/encoding", fixture);
+}
+
+function readFixture(fixture) {
+  return fs.promises.readFile(fixturePath(fixture));
+}
+
+const factories = {
+  Buffer: fixture => readFixture(fixture),
+  Uint8Array: fixture => readFixture(fixture).then(buffer => Uint8Array.from(buffer)),
+  ArrayBuffer: fixture => readFixture(fixture).then(buffer => Uint8Array.from(buffer).buffer),
+  DataView: fixture => readFixture(fixture)
+    .then(buffer => new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength)),
+  Int8Array: fixture => readFixture(fixture).then(buffer => {
+    // Test a view that is indexing into a larger ArrayBuffer. (buffer may already be such a view, but make sure we
+    // test at least one in case it's not.)
+    const target = new Int8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+    const bigger = new Int8Array([0, 0, 0, ...target, 0, 0, 0]);
+    const subView = new Int8Array(bigger.buffer, 3, buffer.byteLength);
+
+    return subView;
+  })
+};
+
+const encodingFixtures = {
+  "no-bom-charset-http-equiv-no-quotes.html": {
+    name: "ISO-8859-5",
+    nameWhenOverridden: "ISO-8859-8",
+    body: "Ђ",
+    bodyWhenOverridden: "¢"
+  },
+  "no-bom-charset-http-equiv-tis-620.html": {
+    name: "windows-874",
+    nameWhenOverridden: "ISO-8859-8",
+    body: "ข",
+    bodyWhenOverridden: "¢"
+  },
+  "no-bom-charset-koi8.html": {
+    name: "KOI8-R",
+    nameWhenOverridden: "ISO-8859-8",
+    body: "╒",
+    bodyWhenOverridden: "¢"
+  },
+  "no-bom-charset-utf-16.html": {
+    name: "UTF-8",
+    nameWhenOverridden: "ISO-8859-8",
+    body: "Є"
+  },
+  "no-bom-charset-utf-16be.html": {
+    name: "UTF-8",
+    nameWhenOverridden: "ISO-8859-8",
+    body: "Є"
+  },
+  "no-bom-charset-utf-16le.html": {
+    name: "UTF-8",
+    nameWhenOverridden: "ISO-8859-8",
+    body: "Є"
+  },
+  "no-bom-no-charset.html": {
+    name: "windows-1252",
+    nameWhenOverridden: "ISO-8859-8",
+    body: "®"
+  },
+  "utf-8-bom.html": {
+    name: "UTF-8",
+    nameWhenOverridden: "UTF-8",
+    body: "Є",
+    bodyWhenOverridden: "Є"
+  },
+  "utf-16be-bom.html": {
+    name: "UTF-16BE",
+    nameWhenOverridden: "UTF-16BE",
+    body: "Є",
+    bodyWhenOverridden: "Є"
+  },
+  "utf-16le-bom.html": {
+    name: "UTF-16LE",
+    nameWhenOverridden: "UTF-16LE",
+    body: "Є",
+    bodyWhenOverridden: "Є"
+  }
+};
+
+const xmlEncodingFixtures = {
+  "no-bom-utf8.xml": {
+    name: "UTF-8",
+    nameWhenOverridden: "ISO-8859-8",
+    body: "Є"
+  },
+  "no-bom-iso-8859-5-byte.xml": {
+    // Contains byte 0xA2 which is Ђ in ISO-8859-5, but since XML defaults to UTF-8,
+    // it will be decoded as invalid UTF-8 (replacement character)
+    name: "UTF-8",
+    nameWhenOverridden: "ISO-8859-8",
+    body: "\uFFFD", // Replacement character
+    bodyWhenOverridden: "¢"
+  },
+  "no-bom-with-encoding-decl.xml": {
+    // The UTF-8 bytes D0 84 decode as п└ in the declared KOI8-R encoding.
+    name: "KOI8-R",
+    nameWhenOverridden: "ISO-8859-8",
+    body: "п└"
+  },
+  "utf-8-bom.xml": {
+    name: "UTF-8",
+    nameWhenOverridden: "UTF-8",
+    body: "Є",
+    bodyWhenOverridden: "Є"
+  },
+  "utf-16be-bom.xml": {
+    name: "UTF-16BE",
+    nameWhenOverridden: "UTF-16BE",
+    body: "Є",
+    bodyWhenOverridden: "Є"
+  },
+  "utf-16le-bom.xml": {
+    name: "UTF-16LE",
+    nameWhenOverridden: "UTF-16LE",
+    body: "Є",
+    bodyWhenOverridden: "Є"
+  }
+};
+
+describe("API: encoding detection", () => {
+  describe("constructor, given a string", () => {
+    it("should default to UTF-8 when passing a string", () => {
+      const dom = new JSDOM("©");
+
+      assert.equal(dom.window.document.characterSet, "UTF-8");
+      assert.equal(dom.window.document.body.textContent, "©");
+    });
+
+    it("should default to UTF-8 when passing nothing", () => {
+      const dom = new JSDOM();
+
+      assert.equal(dom.window.document.characterSet, "UTF-8");
+      assert.equal(dom.window.document.body.textContent, "");
+    });
+
+    it("should default to UTF-8 when passing null", () => {
+      const dom = new JSDOM(null);
+
+      assert.equal(dom.window.document.characterSet, "UTF-8");
+      assert.equal(dom.window.document.body.textContent, "null");
+    });
+  });
+
+  describe("constructor, given binary data", () => {
+    describe("with no contentType option given", () => {
+      for (const binaryDataType of Object.keys(factories)) {
+        const factory = factories[binaryDataType];
+
+        describe(binaryDataType, () => {
+          for (const encodingFixture of Object.keys(encodingFixtures)) {
+            const { name, body } = encodingFixtures[encodingFixture];
+
+            it(`should sniff ${encodingFixture} as ${name}`, () => {
+              return factory(encodingFixture).then(binaryData => {
+                assert.equal(
+                  binaryData.constructor.name,
+                  binaryDataType,
+                  "Sanity check: input binary data must be of the right type"
+                );
+
+                const dom = new JSDOM(binaryData);
+
+                assert.equal(dom.window.document.characterSet, name);
+                assert.equal(dom.window.document.body.textContent, body);
+              });
+            });
+          }
+        });
+      }
+    });
+
+    describe("with a contentType option specifying csiso88598e", () => {
+      for (const binaryDataType of Object.keys(factories)) {
+        const factory = factories[binaryDataType];
+
+        describe(binaryDataType, () => {
+          for (const encodingFixture of Object.keys(encodingFixtures)) {
+            const { nameWhenOverridden, bodyWhenOverridden } = encodingFixtures[encodingFixture];
+
+            it(`should sniff ${encodingFixture} as ${nameWhenOverridden}`, () => {
+              return factory(encodingFixture).then(binaryData => {
+                assert.equal(
+                  binaryData.constructor.name,
+                  binaryDataType,
+                  "Sanity check: input binary data must be of the right type"
+                );
+
+                const dom = new JSDOM(binaryData, { contentType: "text/html;charset=csiso88598e" });
+
+                assert.equal(dom.window.document.characterSet, nameWhenOverridden);
+                assert.equal(dom.window.document.contentType, "text/html"); // encoding should be stripped
+
+                if (bodyWhenOverridden) {
+                  assert.equal(dom.window.document.body.textContent, bodyWhenOverridden);
+                }
+              });
+            });
+          }
+        });
+      }
+    });
+  });
+
+  describe("fromFile", () => {
+    for (const encodingFixture of Object.keys(encodingFixtures)) {
+      const { name, body } = encodingFixtures[encodingFixture];
+
+      it(`should sniff ${encodingFixture} as ${name}`, () => {
+        return JSDOM.fromFile(fixturePath(encodingFixture)).then(dom => {
+          assert.equal(dom.window.document.characterSet, name);
+          assert.equal(dom.window.document.body.textContent, body);
+        });
+      });
+    }
+  });
+
+  describe("fromURL", () => {
+    let server, host;
+    before(() => {
+      return createServer((req, res) => {
+        const [, fixture, query] = /^\/([^?]+)(\?.*)?$/.exec(req.url);
+
+        const headers = { "Content-Type": "text/html" };
+        if (query === "?charset=csiso88598e") {
+          headers["Content-Type"] = "text/html;charset=csiso88598e";
+        }
+
+        res.writeHead(200, headers);
+        fs.createReadStream(fixturePath(fixture)).pipe(res);
+      }).then(s => {
+        server = s;
+        host = `http://127.0.0.1:${s.address().port}`;
+      });
+    });
+
+    after(() => server.destroy());
+
+    describe("with no Content-Type header given", () => {
+      for (const encodingFixture of Object.keys(encodingFixtures)) {
+        const { name, body } = encodingFixtures[encodingFixture];
+
+        it(`should sniff ${encodingFixture} as ${name}`, () => {
+          return JSDOM.fromURL(`${host}/${encodingFixture}`).then(dom => {
+            assert.equal(dom.window.document.characterSet, name);
+            assert.equal(dom.window.document.body.textContent, body);
+          });
+        });
+      }
+    });
+
+    describe("with a Content-Type header specifying csiso88598e", () => {
+      for (const encodingFixture of Object.keys(encodingFixtures)) {
+        const { nameWhenOverridden, bodyWhenOverridden } = encodingFixtures[encodingFixture];
+
+        it(`should sniff ${encodingFixture} as ${nameWhenOverridden}`, () => {
+          return JSDOM.fromURL(`${host}/${encodingFixture}?charset=csiso88598e`).then(dom => {
+            assert.equal(dom.window.document.characterSet, nameWhenOverridden);
+            assert.equal(dom.window.document.contentType, "text/html"); // encoding should be stripped
+
+            if (bodyWhenOverridden) {
+              assert.equal(dom.window.document.body.textContent, bodyWhenOverridden);
+            }
+          });
+        });
+      }
+    });
+  });
+
+  describe("XML: constructor, given binary data", () => {
+    for (const [encoding, format] of [["UTF-16LE", "uint8-le"], ["UTF-16BE", "uint8-be"]]) {
+      it(`should detect ${encoding} without a BOM`, () => {
+        const input = utf16fromString(`<?xml version="1.0" encoding="${encoding}"?><r>Є</r>`, format);
+        const dom = new JSDOM(input, { contentType: "application/xhtml+xml" });
+
+        assert.equal(dom.window.document.characterSet, encoding);
+        assert.equal(dom.window.document.documentElement.textContent, "Є");
+      });
+    }
+
+    describe("with contentType application/xhtml+xml (no charset)", () => {
+      for (const binaryDataType of Object.keys(factories)) {
+        const factory = factories[binaryDataType];
+
+        describe(binaryDataType, () => {
+          for (const encodingFixture of Object.keys(xmlEncodingFixtures)) {
+            const { name, body } = xmlEncodingFixtures[encodingFixture];
+
+            it(`should detect ${encodingFixture} as ${name}`, () => {
+              return factory(encodingFixture).then(binaryData => {
+                assert.equal(
+                  binaryData.constructor.name,
+                  binaryDataType,
+                  "Sanity check: input binary data must be of the right type"
+                );
+
+                const dom = new JSDOM(binaryData, { contentType: "application/xhtml+xml" });
+
+                assert.equal(dom.window.document.characterSet, name);
+                assert.equal(dom.window.document.documentElement.textContent, body);
+              });
+            });
+          }
+        });
+      }
+    });
+
+    describe("with contentType application/xhtml+xml;charset=csiso88598e", () => {
+      for (const binaryDataType of Object.keys(factories)) {
+        const factory = factories[binaryDataType];
+
+        describe(binaryDataType, () => {
+          for (const encodingFixture of Object.keys(xmlEncodingFixtures)) {
+            const { nameWhenOverridden, bodyWhenOverridden } = xmlEncodingFixtures[encodingFixture];
+
+            it(`should detect ${encodingFixture} as ${nameWhenOverridden}`, () => {
+              return factory(encodingFixture).then(binaryData => {
+                assert.equal(
+                  binaryData.constructor.name,
+                  binaryDataType,
+                  "Sanity check: input binary data must be of the right type"
+                );
+
+                const dom = new JSDOM(binaryData, { contentType: "application/xhtml+xml;charset=csiso88598e" });
+
+                assert.equal(dom.window.document.characterSet, nameWhenOverridden);
+                assert.equal(dom.window.document.contentType, "application/xhtml+xml"); // encoding should be stripped
+
+                if (bodyWhenOverridden) {
+                  assert.equal(dom.window.document.documentElement.textContent, bodyWhenOverridden);
+                }
+              });
+            });
+          }
+        });
+      }
+    });
+  });
+
+  describe("XML: fromFile", () => {
+    for (const encodingFixture of Object.keys(xmlEncodingFixtures)) {
+      const { name, body } = xmlEncodingFixtures[encodingFixture];
+
+      it(`should detect ${encodingFixture} as ${name}`, () => {
+        return JSDOM.fromFile(fixturePath(encodingFixture)).then(dom => {
+          assert.equal(dom.window.document.characterSet, name);
+          assert.equal(dom.window.document.documentElement.textContent, body);
+        });
+      });
+    }
+  });
+
+  describe("XML: fromURL", () => {
+    let server, host;
+    before(() => {
+      return createServer((req, res) => {
+        const [, fixture, query] = /^\/([^?]+)(\?.*)?$/.exec(req.url);
+
+        const headers = { "Content-Type": "application/xhtml+xml" };
+        if (query === "?charset=csiso88598e") {
+          headers["Content-Type"] = "application/xhtml+xml;charset=csiso88598e";
+        }
+
+        res.writeHead(200, headers);
+        fs.createReadStream(fixturePath(fixture)).pipe(res);
+      }).then(s => {
+        server = s;
+        host = `http://127.0.0.1:${s.address().port}`;
+      });
+    });
+
+    after(() => server.destroy());
+
+    describe("with no charset in Content-Type header", () => {
+      for (const encodingFixture of Object.keys(xmlEncodingFixtures)) {
+        const { name, body } = xmlEncodingFixtures[encodingFixture];
+
+        it(`should detect ${encodingFixture} as ${name}`, () => {
+          return JSDOM.fromURL(`${host}/${encodingFixture}`).then(dom => {
+            assert.equal(dom.window.document.characterSet, name);
+            assert.equal(dom.window.document.documentElement.textContent, body);
+          });
+        });
+      }
+    });
+
+    describe("with a Content-Type header specifying csiso88598e", () => {
+      for (const encodingFixture of Object.keys(xmlEncodingFixtures)) {
+        const { nameWhenOverridden, bodyWhenOverridden } = xmlEncodingFixtures[encodingFixture];
+
+        it(`should detect ${encodingFixture} as ${nameWhenOverridden}`, () => {
+          return JSDOM.fromURL(`${host}/${encodingFixture}?charset=csiso88598e`).then(dom => {
+            assert.equal(dom.window.document.characterSet, nameWhenOverridden);
+            assert.equal(dom.window.document.contentType, "application/xhtml+xml"); // encoding should be stripped
+
+            if (bodyWhenOverridden) {
+              assert.equal(dom.window.document.documentElement.textContent, bodyWhenOverridden);
+            }
+          });
+        });
+      }
+    });
+  });
+});

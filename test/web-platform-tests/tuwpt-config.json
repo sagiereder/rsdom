@@ -1,0 +1,50 @@
+{
+  "browser_host": "web-platform.test",
+  "doc_root": "../to-upstream",
+  "ws_doc_root": "../tests/websockets/handlers",
+  "server_host": null,
+  "ports": {
+    "h2": [10002],
+    "http": [10000, "auto"],
+    "https": [10443, "auto"],
+    "ws": [10001],
+    "wss": [10444]
+  },
+  "aliases": [
+    {
+      "url-path": "/common/",
+      "local-dir": "../tests/common/"
+    },
+    {
+      "url-path": "/css/support/",
+      "local-dir": "../tests/css/support/"
+    },
+    {
+      "url-path": "/fetch/api/resources/",
+      "local-dir": "../tests/fetch/api/resources/"
+    },
+    {
+      "url-path": "/html/browsers/browsing-the-web/resources/",
+      "local-dir": "../tests/html/browsers/browsing-the-web/resources/"
+    }
+  ],
+  "logging": {
+    "level": "info"
+  },
+  "bind_address": true,
+  "ssl": {
+    "type": "pregenerated",
+    "encrypt_after_connect": false,
+    "openssl": {
+      "openssl_binary": "openssl",
+      "base_path": "_certs",
+      "force_regenerate": false,
+      "base_conf_path": null
+    },
+    "pregenerated": {
+      "host_key_path": "tools/certs/web-platform.test.key",
+      "host_cert_path": "tools/certs/web-platform.test.pem"
+    },
+    "none": {}
+  }
+}

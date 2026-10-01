@@ -1,0 +1,559 @@
+#!/usr/bin/env node
+"use strict";
+
+// Serves to-upstream WPT tests for verification in a real browser, using the WPT Python server
+// (for .py handlers, .any.js generation, etc.) with a Node.js proxy in front for the runner UI
+// and result collection.
+//
+// Requires the web-platform.test hosts entry; see
+// https://web-platform-tests.org/running-tests/from-local-system.html#system-setup
+//
+// Usage:
+//   npm run test:tuwpt:browser -- --browser=chrome --browser-arg=--headless --fgrep domparsing
+//
+// `--fgrep` values are substring matches against test paths. Without them, all to-upstream tests
+// are included. Use --browser (-b) to specify a browser command and repeat --browser-arg to pass
+// arguments; otherwise opens the default browser. Chrome/Chromium gets an isolated temporary
+// profile with popup blocking disabled. Sandbox settings are left to the caller.
+
+/* eslint-disable no-console */
+
+const { spawn } = require("node:child_process");
+const { once } = require("node:events");
+const { readFile, mkdtemp, rm } = require("node:fs/promises");
+const http = require("node:http");
+const { tmpdir } = require("node:os");
+const { resolve, join, extname, basename } = require("node:path");
+const { parseArgs } = require("node:util");
+const opener = require("opener");
+
+const wptDir = resolve(__dirname, "../test/web-platform-tests");
+const testsDir = resolve(wptDir, "tests");
+const toUpstreamDir = resolve(wptDir, "to-upstream");
+
+const wptServer = require("../test/web-platform-tests/wpt-server.js");
+const { killSubprocess } = require("../test/web-platform-tests/utils.js");
+const { regenerateManifest, getPossibleTestFilePaths } = require("../test/web-platform-tests/wpt-manifest-utils.js");
+
+// --- Custom testharnessreport.js ---
+// Notifies the runner page (opener window) of test completion via postMessage.
+
+const customReporter = `\
+"use strict";
+(() => {
+  const testURL = location.pathname + location.search;
+  add_completion_callback((tests, status) => {
+    if (!window.opener) {
+      return;
+    }
+    const results = {
+      test: testURL,
+      status: status.status,
+      message: status.message || null,
+      subtests: tests.map(t => ({ name: t.name, status: t.status, message: t.message || null }))
+    };
+    window.opener.postMessage({ type: "wpt-complete", results }, "*");
+  });
+})();
+`;
+
+// --- Runner page ---
+
+function generateRunnerHTML(testList) {
+  return `<!DOCTYPE html>
+<meta charset="utf-8">
+<title>WPT Browser Verification (${testList.length} tests)</title>
+<style>
+  body { font-family: system-ui, sans-serif; margin: 1em; }
+  #progress { font-size: 1.2em; margin-bottom: 1em; }
+  .result { margin: 2px 0; font-family: monospace; font-size: 0.9em; }
+  .pass { color: green; }
+  .fail { color: red; }
+  .subtest { margin-left: 2em; color: #666; }
+  #summary { font-size: 1.2em; font-weight: bold; margin-top: 1em; padding: 0.5em; }
+  #summary.pass { background: #dfd; }
+  #summary.fail { background: #fdd; }
+</style>
+
+<div id="progress">Starting...</div>
+<button id="launch" hidden>Open test window</button>
+<div id="results"></div>
+<div id="summary" hidden></div>
+
+<script>
+"use strict";
+const tests = ${JSON.stringify(testList)};
+let current = 0;
+let passCount = 0;
+let failCount = 0;
+const TIMEOUT_MS = 30000;
+let timer = null;
+let awaitingResult = false;
+
+const progress = document.getElementById("progress");
+const resultsDiv = document.getElementById("results");
+const summaryDiv = document.getElementById("summary");
+const launchButton = document.getElementById("launch");
+let testWindow = null;
+
+async function reportToServer(data) {
+  const response = await fetch("/__report__", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data)
+  });
+  if (!response.ok) {
+    throw new Error("Could not report test result: " + response.status);
+  }
+}
+
+window.addEventListener("message", e => {
+  if (e.source === testWindow && e.origin === location.origin &&
+      e.data && e.data.type === "wpt-complete" && e.data.results.test === tests[current]) {
+    completeTest(e.data.results);
+  }
+});
+
+function completeTest(data) {
+  // A late completion message can arrive while a timeout is being reported.
+  if (!awaitingResult) {
+    return;
+  }
+  awaitingResult = false;
+  clearTimeout(timer);
+  showResult(data);
+  reportToServer(data).then(advance).catch(showError);
+}
+
+function showError(error) {
+  progress.textContent = error.message;
+}
+
+function showResult(data) {
+  const statusNames = ["PASS", "FAIL", "TIMEOUT", "NOTRUN", "PRECONDITION_FAILED"];
+  const passed = data.subtests.filter(t => t.status === 0).length;
+  const total = data.subtests.length;
+  const allPass = passed === total && data.status === 0;
+
+  const div = document.createElement("div");
+  div.className = "result " + (allPass ? "pass" : "fail");
+  div.textContent = (allPass ? "PASS" : "FAIL") + " " + data.test + " (" + passed + "/" + total + ")";
+
+  if (!allPass) {
+    for (const t of data.subtests) {
+      if (t.status !== 0) {
+        const sub = document.createElement("div");
+        sub.className = "subtest";
+        sub.textContent = (statusNames[t.status] || "?") + ": " + t.name;
+        div.appendChild(sub);
+      }
+    }
+    failCount++;
+  } else {
+    passCount++;
+  }
+
+  resultsDiv.appendChild(div);
+  div.scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
+function advance() {
+  current++;
+  if (current < tests.length) {
+    runNext();
+  } else {
+    showSummary();
+  }
+}
+
+function runNext() {
+  progress.textContent = \`Running \${current + 1}/\${tests.length}: \${tests[current]}\`;
+  testWindow?.close();
+  testWindow = window.open(tests[current]);
+  if (testWindow === null) {
+    progress.textContent = "The browser blocked the test window. Click below to open it.";
+    launchButton.hidden = false;
+    return;
+  }
+  launchButton.hidden = true;
+  awaitingResult = true;
+  timer = setTimeout(() => {
+    const timeoutResult = {
+      test: tests[current],
+      status: 2,
+      message: "Timed out",
+      subtests: [{ name: "(entire test)", status: 2, message: "Timed out after " + (TIMEOUT_MS / 1000) + "s" }]
+    };
+    completeTest(timeoutResult);
+  }, TIMEOUT_MS);
+}
+
+function showSummary() {
+  progress.textContent = "Done!";
+  testWindow?.close();
+  summaryDiv.hidden = false;
+  summaryDiv.className = failCount === 0 ? "pass" : "fail";
+  summaryDiv.textContent = passCount + " passed, " + failCount + " failed out of " + tests.length + " tests";
+}
+
+launchButton.addEventListener("click", runNext);
+runNext();
+</script>`;
+}
+
+// --- MIME types ---
+
+const MIME = {
+  ".html": "text/html",
+  ".htm": "text/html",
+  ".js": "text/javascript",
+  ".mjs": "text/javascript",
+  ".css": "text/css",
+  ".json": "application/json",
+  ".svg": "image/svg+xml",
+  ".png": "image/png",
+  ".xml": "application/xml",
+  ".xht": "application/xhtml+xml",
+  ".xhtml": "application/xhtml+xml"
+};
+
+// --- Helpers ---
+
+function serveFile(res, content, pathname) {
+  const mime = MIME[extname(pathname)] || "application/octet-stream";
+  res.writeHead(200, { "Content-Type": mime });
+  res.end(content);
+}
+
+async function tryReadFile(filePath) {
+  try {
+    return await readFile(filePath);
+  } catch (e) {
+    if (e.code === "ENOENT") {
+      return undefined;
+    }
+    throw e;
+  }
+}
+
+// --- Main ---
+
+async function main() {
+  const { values } = parseArgs({
+    options: {
+      "browser": { type: "string", short: "b" },
+      "browser-arg": { type: "string", multiple: true },
+      "fgrep": { type: "string", multiple: true },
+      "reporter": { type: "string" }
+    }
+  });
+  const { browser, fgrep, reporter } = values;
+  const browserArgs = values["browser-arg"] ?? [];
+  if (browser === undefined && browserArgs.length > 0) {
+    throw new Error("--browser-arg requires --browser");
+  }
+  if (reporter !== undefined && reporter !== "min") {
+    throw new Error("The only supported reporter is min");
+  }
+
+  // Regenerate the manifest (cheap since we have few files) and read test paths from it.
+  const manifest = regenerateManifest(toUpstreamDir, resolve(wptDir, "tuwpt-manifest.json"));
+  const testPaths = getPossibleTestFilePaths(manifest).map(p => "/" + p);
+  const filters = fgrep ?? [];
+  const filtered = filters.length > 0 ?
+    testPaths.filter(p => filters.some(f => p.includes(f))) :
+    testPaths;
+
+  if (filtered.length === 0) {
+    console.error("No tests found" + (filters.length ? ` matching: ${filters.join(", ")}` : ""));
+    process.exit(1);
+  }
+
+  console.log(`Found ${filtered.length} test(s) to verify\n`);
+
+  // Start WPT server
+  console.log("Starting WPT server...");
+  const { urls, subprocess: wptProcess } = await wptServer.start({ toUpstream: true });
+  const wptOrigin = new URL(urls[0]);
+  console.log(`WPT server ready at ${wptOrigin.href}\n`);
+
+  // Results tracking
+  const results = new Map();
+  const TEST_PASS = 0;
+  const HARNESS_OK = 0;
+  let browserProcess = null;
+  let browserProfile = null;
+  let finishing = false;
+
+  function printResult(data) {
+    const statusNames = ["PASS", "FAIL", "TIMEOUT", "NOTRUN", "PRECONDITION_FAILED"];
+    const passed = data.subtests.filter(t => t.status === TEST_PASS).length;
+    const total = data.subtests.length;
+    const allPass = passed === total && data.status === HARNESS_OK;
+
+    if (allPass && reporter === "min") {
+      return;
+    }
+    console.log(`${allPass ? "PASS" : "FAIL"} ${data.test} (${passed}/${total})`);
+    if (data.status !== HARNESS_OK && data.message) {
+      console.log(`  Harness error: ${data.message}`);
+    }
+    for (const t of data.subtests) {
+      if (t.status !== TEST_PASS) {
+        console.log(`  ${statusNames[t.status] || "UNKNOWN"}: ${t.name}`);
+        if (t.message) {
+          console.log(`    ${t.message.split("\n")[0]}`);
+        }
+      }
+    }
+  }
+
+  function printSummary() {
+    console.log("\n--- Summary ---");
+    let passCount = 0;
+    let failCount = 0;
+    for (const [, data] of results) {
+      const passed = data.subtests.filter(t => t.status === TEST_PASS).length;
+      if (passed === data.subtests.length && data.status === HARNESS_OK) {
+        passCount++;
+      } else {
+        failCount++;
+      }
+    }
+    const missing = filtered.length - results.size;
+    console.log(`${passCount} passed, ${failCount} failed` + (missing ? `, ${missing} not run` : ""));
+    return failCount === 0 && missing === 0;
+  }
+
+  // Proxy server
+  // Routes:
+  //   /                              -> runner page
+  //   /__report__                    -> result collection (POST)
+  //   /resources/testharnessreport.js -> custom reporter
+  //   /resources/*                   -> serve from tests/resources/ (the WPT server's tuwpt config
+  //                                     doesn't alias /resources/, and the jsdom interceptor
+  //                                     normally handles this)
+  //   /*                             -> proxy to WPT server; on 404, try serving from tests/
+  //                                     (handles cross-references like /dom/nodes/selectors.js)
+
+  function proxyToWPT(req, res) {
+    return new Promise((resolveResponse, reject) => {
+      const proxyReq = http.request({
+        hostname: wptOrigin.hostname,
+        port: wptOrigin.port,
+        path: req.url,
+        method: req.method,
+        headers: {
+          ...req.headers,
+          host: wptOrigin.host
+        }
+      }, resolveResponse);
+
+      proxyReq.on("error", reject);
+      res.on("close", () => proxyReq.destroy());
+      req.pipe(proxyReq);
+    });
+  }
+
+  const proxy = http.createServer(async (req, res) => {
+    const url = new URL(req.url, `http://${req.headers.host}`);
+
+    // Result reporting
+    if (req.method === "POST" && url.pathname === "/__report__") {
+      let body = "";
+      req.on("data", chunk => {
+        body += chunk;
+      });
+      req.on("end", () => {
+        try {
+          const data = JSON.parse(body);
+          if (data.test !== filtered[results.size]) {
+            throw new Error(`Unexpected test result: ${data.test}`);
+          }
+          results.set(data.test, data);
+          printResult(data);
+          if (results.size === filtered.length) {
+            const passed = printSummary();
+            res.on("finish", () => finish(passed ? 0 : 1));
+          }
+        } catch (e) {
+          console.error("Failed to parse report:", e.message);
+          res.writeHead(400, { "Content-Type": "text/plain" });
+          res.end(e.message);
+          finish(1);
+          return;
+        }
+        res.writeHead(200, { "Content-Type": "text/plain" });
+        res.end("OK");
+      });
+      return;
+    }
+
+    // Runner page
+    if (url.pathname === "/") {
+      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+      res.end(generateRunnerHTML(filtered));
+      return;
+    }
+
+    // Custom testharnessreport.js
+    if (url.pathname === "/resources/testharnessreport.js") {
+      res.writeHead(200, { "Content-Type": "text/javascript" });
+      res.end(customReporter);
+      return;
+    }
+
+    // /resources/* — serve directly from tests/resources/
+    if (url.pathname.startsWith("/resources/")) {
+      const content = await tryReadFile(join(testsDir, url.pathname.slice(1)));
+      if (content !== undefined) {
+        serveFile(res, content, url.pathname);
+      } else {
+        res.writeHead(404, { "Content-Type": "text/plain" });
+        res.end("Not found: " + url.pathname);
+      }
+      return;
+    }
+
+    // Everything else — proxy to WPT server, fall back to tests/ on 404.
+    // The fallback handles to-upstream tests that reference files from the upstream WPT tree, e.g.
+    // ParentNode-querySelector-All-dont-upstream.html loads /dom/nodes/selectors.js and
+    // /dom/nodes/ParentNode-querySelector-All.js which live in tests/, not to-upstream/. The WPT
+    // server (doc_root ../to-upstream) 404s on these, so we serve them from tests/ instead. This
+    // mirrors the hardcoded list in run-single-wpt.js's createWPTInterceptor().
+    try {
+      const proxyRes = await proxyToWPT(req, res);
+
+      if (proxyRes.statusCode === 404) {
+        proxyRes.resume();
+        const content = await tryReadFile(join(testsDir, url.pathname.slice(1)));
+        if (content !== undefined) {
+          serveFile(res, content, url.pathname);
+        } else {
+          console.error(`  404: ${url.pathname}`);
+          res.writeHead(404, { "Content-Type": "text/plain" });
+          res.end("Not found: " + url.pathname);
+        }
+      } else {
+        res.writeHead(proxyRes.statusCode, proxyRes.headers);
+        proxyRes.pipe(res);
+      }
+    } catch (e) {
+      if (res.destroyed) {
+        return;
+      }
+      console.error(`  Proxy error for ${url.pathname}: ${e.message}`);
+      res.writeHead(502, { "Content-Type": "text/plain" });
+      res.end("Proxy error: " + e.message);
+    }
+  });
+
+  const PREFERRED_PORTS = [8023, 8024, 8025];
+
+  async function onListening() {
+    const { port } = proxy.address();
+    const url = `http://web-platform.test:${port}/`;
+    console.log(`Opening ${url}\n`);
+    console.log("Results will appear below as tests complete.");
+    console.log("Press Ctrl+C to stop.\n");
+    if (browser === undefined) {
+      opener(url, error => {
+        if (error) {
+          console.error(`Could not open the default browser: ${error.message}`);
+          finish(1);
+        }
+      });
+      return;
+    }
+
+    const args = [];
+    const browserName = basename(browser).toLowerCase().replace(/\.exe$/, "");
+    const isChromium = /^(?:chrome|chromium(?:-browser)?|google[- ]chrome(?:-(?:stable|beta|unstable|canary))?)$/
+      .test(browserName);
+    if (isChromium) {
+      args.push("--disable-popup-blocking", "--disable-background-timer-throttling", "--no-first-run");
+      if (!browserArgs.some(arg => arg === "--user-data-dir" || arg.startsWith("--user-data-dir="))) {
+        browserProfile = await mkdtemp(join(tmpdir(), "jsdom-wpt-browser-"));
+        args.push(`--user-data-dir=${browserProfile}`);
+      }
+    }
+
+    browserProcess = spawn(browser, [...args, ...browserArgs, url], { stdio: "inherit" });
+    browserProcess.on("error", error => {
+      console.error(`Could not launch ${browser}: ${error.message}`);
+      finish(1);
+    });
+    browserProcess.on("exit", (code, signal) => {
+      if (!finishing && (code !== 0 || browserProfile !== null)) {
+        console.error(`${browser} exited before verification finished (${signal || `status ${code}`})`);
+        finish(1);
+      }
+    });
+  }
+
+  let portIndex = 0;
+  proxy.on("error", e => {
+    if (e.code === "EADDRINUSE" && portIndex < PREFERRED_PORTS.length) {
+      proxy.listen(PREFERRED_PORTS[portIndex++]);
+    } else {
+      throw e;
+    }
+  });
+  proxy.on("listening", () => {
+    onListening().catch(error => {
+      console.error(`Could not launch the browser: ${error.message}`);
+      finish(1);
+    });
+  });
+  proxy.listen(PREFERRED_PORTS[portIndex++]);
+
+  async function cleanup() {
+    if (results.size > 0 && results.size < filtered.length) {
+      printSummary();
+    }
+    proxy.close();
+    try {
+      if (browserProcess !== null && browserProcess.pid !== undefined &&
+          browserProcess.exitCode === null && browserProcess.signalCode === null) {
+        const exited = once(browserProcess, "exit");
+        browserProcess.kill();
+        await exited;
+      }
+      if (browserProfile !== null) {
+        await rm(browserProfile, { recursive: true, force: true, maxRetries: 3 });
+      }
+    } finally {
+      if (wptProcess.exitCode === null && wptProcess.signalCode === null) {
+        await killSubprocess(wptProcess);
+      }
+    }
+  }
+
+  async function finish(exitCode) {
+    if (finishing) {
+      return;
+    }
+    finishing = true;
+    try {
+      await cleanup();
+    } catch (error) {
+      console.error(`Cleanup failed: ${error.message}`);
+      exitCode = 1;
+    }
+    process.exit(exitCode);
+  }
+
+  process.on("SIGINT", () => {
+    finish(130);
+  });
+
+  process.on("uncaughtException", e => {
+    console.error("Uncaught exception:", e);
+    finish(1);
+  });
+}
+
+main().catch(error => {
+  console.error(error.message);
+  process.exitCode = 1;
+});
