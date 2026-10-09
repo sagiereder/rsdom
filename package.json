@@ -36,10 +36,30 @@
     "xml-name-validator": "^5.0.0"
   },
   "peerDependencies": {
-    "canvas": "^3.2.3"
+    "@jest/environment": ">=29",
+    "@jest/fake-timers": ">=29",
+    "canvas": "^3.2.3",
+    "jest-mock": ">=29",
+    "jest-util": ">=29",
+    "vitest": ">=3"
   },
   "peerDependenciesMeta": {
+    "@jest/environment": {
+      "optional": true
+    },
+    "@jest/fake-timers": {
+      "optional": true
+    },
     "canvas": {
+      "optional": true
+    },
+    "jest-mock": {
+      "optional": true
+    },
+    "jest-util": {
+      "optional": true
+    },
+    "vitest": {
       "optional": true
     }
   },
@@ -76,7 +96,8 @@
     "lint": "eslint --cache",
     "wpt:init": "git submodule update --init --recursive",
     "wpt:reset": "rm -rf ./tests/web-platform-tests/tests && npm run wpt:init",
-    "wpt:update": "git submodule update --init --recursive --remote && cd tests/web-platform-tests/tests && python wpt.py manifest --path ../wpt-manifest.json"
+    "wpt:update": "git submodule update --init --recursive --remote && cd tests/web-platform-tests/tests && python wpt.py manifest --path ../wpt-manifest.json",
+    "prepack": "npm run prepare"
   },
   "wireit": {
     "prepare": {
@@ -111,6 +132,13 @@
     "README.md"
   ],
   "main": "./src/api.js",
+  "exports": {
+    ".": "./src/api.js",
+    "./jest": "./src/integrations/jest.js",
+    "./vitest": "./src/integrations/vitest.js",
+    "./package.json": "./package.json",
+    "./*": "./*"
+  },
   "type": "commonjs",
   "engines": {
     "node": "^22.22.2 || ^24.15.0 || >=26.0.0"

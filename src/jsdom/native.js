@@ -1,14 +1,52 @@
 "use strict";
+const fs = require("node:fs");
 const path = require("node:path");
 
-// The Rust addon (src/native/) accelerates hot paths. JSDOM_NATIVE=0 forces the pure-JS fallbacks.
-let native = null;
-if (process.env.JSDOM_NATIVE !== "0") {
+// The Rust addon (src/native/) accelerates hot paths. It is looked up in this order:
+//
+//   1. the local development build, src/native/jsdom-native.node (`node src/native/build.js`);
+//   2. the prebuilt binary from the per-platform npm package (rsdom-<platform>, an optionalDependency);
+//   3. nothing: rsdom uses the pure-JS fallbacks.
+//
+// Every failure is silent. JSDOM_NATIVE=0 forces the pure-JS fallbacks.
+
+function isMusl() {
   try {
-    native = require(path.resolve(__dirname, "../native/jsdom-native.node"));
+    return fs.readFileSync("/usr/bin/ldd", "latin1").includes("musl");
   } catch {
-    native = null;
+    // No ldd (e.g. distroless images): ask the process report.
+  }
+  try {
+    const { header } = process.report.getReport();
+    return !header.glibcVersionRuntime;
+  } catch {
+    return false;
   }
 }
 
-module.exports = native;
+function platformPackageName() {
+  const { platform, arch } = process;
+  if (platform === "linux") {
+    return `rsdom-linux-${arch}-${isMusl() ? "musl" : "gnu"}`;
+  }
+  if (platform === "win32") {
+    return `rsdom-win32-${arch}-msvc`;
+  }
+  return `rsdom-${platform}-${arch}`;
+}
+
+function load() {
+  try {
+    return require(path.resolve(__dirname, "../native/jsdom-native.node"));
+  } catch {
+    // Not a development checkout, or the addon has not been built.
+  }
+  try {
+    return require(platformPackageName());
+  } catch {
+    // No prebuilt binary for this platform, or it was not installed (e.g. --no-optional).
+  }
+  return null;
+}
+
+module.exports = process.env.JSDOM_NATIVE === "0" ? null : load();

@@ -1,0 +1,166 @@
+name: Release
+
+# Pushing a tag v<version> (matching package.json's version) builds the native addon for every platform in
+# scripts/release/platforms.js and publishes:
+#   - rsdom-<platform> (npm/<platform>/), one per prebuilt binary;
+#   - rsdom, with those packages added as optionalDependencies;
+#   - jest-environment-rsdom and vitest-environment-rsdom (packages/).
+# Running the workflow by hand builds everything and does a `npm publish --dry-run` rehearsal instead.
+# Needs the NPM_TOKEN secret (an npm automation or granular token that can publish these packages).
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build ${{ matrix.platform }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: darwin-arm64
+            os: macos-14
+            target: aarch64-apple-darwin
+            smoke: native
+          # GitHub retired the macos-13 image; macos-15-intel is the remaining x64 macOS runner.
+          - platform: darwin-x64
+            os: macos-15-intel
+            target: x86_64-apple-darwin
+            smoke: native
+          # Linux builds use cargo-zigbuild so the gnu binaries link against glibc 2.17 and load on old distros.
+          - platform: linux-x64-gnu
+            os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            build-target: x86_64-unknown-linux-gnu.2.17
+            zig: true
+            smoke: native
+          - platform: linux-arm64-gnu
+            os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            build-target: aarch64-unknown-linux-gnu.2.17
+            zig: true
+            smoke: docker-arm64
+          - platform: linux-x64-musl
+            os: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+            zig: true
+            # A Node addon is a cdylib, which musl's default static CRT can't produce.
+            rustflags: -C target-feature=-crt-static
+            smoke: docker-alpine
+          - platform: win32-x64-msvc
+            os: windows-latest
+            target: x86_64-pc-windows-msvc
+            smoke: native
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src/native -> target
+          key: ${{ matrix.target }}
+      - if: matrix.zig
+        uses: mlugg/setup-zig@v2
+        with:
+          version: 0.14.1
+      - if: matrix.zig
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-zigbuild
+      - name: Build
+        shell: bash
+        env:
+          RUSTFLAGS: ${{ matrix.rustflags }}
+        run: >-
+          node src/native/build.js
+          --target ${{ matrix.build-target || matrix.target }}
+          ${{ matrix.zig && '--zig' || '' }}
+          --out dist/rsdom.${{ matrix.platform }}.node
+      - name: Smoke test (load the addon)
+        if: matrix.smoke == 'native'
+        shell: bash
+        run: node -e "const a = require('./dist/rsdom.${{ matrix.platform }}.node'); if (!a) process.exit(1); console.log(Object.keys(a))"
+      - name: Smoke test (load the addon on Alpine)
+        if: matrix.smoke == 'docker-alpine'
+        run: >-
+          docker run --rm -v "$PWD/dist:/dist" node:24-alpine
+          node -e "console.log(Object.keys(require('/dist/rsdom.${{ matrix.platform }}.node')))"
+      - name: Smoke test (load the addon on arm64 under QEMU)
+        if: matrix.smoke == 'docker-arm64'
+        run: |
+          docker run --rm --privileged tonistiigi/binfmt --install arm64
+          docker run --rm --platform linux/arm64 -v "$PWD/dist:/dist" node:24-bookworm-slim \
+            node -e "console.log(Object.keys(require('/dist/rsdom.${{ matrix.platform }}.node')))"
+      - uses: actions/upload-artifact@v5
+        with:
+          name: bindings-${{ matrix.platform }}
+          path: dist/rsdom.${{ matrix.platform }}.node
+          if-no-files-found: error
+
+  publish:
+    name: Publish to npm
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # npm provenance
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      - name: Install dependencies (also generates src/generated)
+        run: npm ci
+      - name: Check versions
+        shell: bash
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          if [[ "$GITHUB_REF_TYPE" == tag && "$GITHUB_REF_NAME" != "v$VERSION" ]]; then
+            echo "Tag $GITHUB_REF_NAME does not match package.json version $VERSION" >&2
+            exit 1
+          fi
+          node scripts/release/platform-packages.js check
+      - uses: actions/download-artifact@v5
+        with:
+          pattern: bindings-*
+          path: artifacts
+      - name: Copy binaries into npm/<platform>/
+        run: node scripts/release/platform-packages.js copy artifacts
+      - name: Publish
+        shell: bash
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          FLAGS=(--access public)
+          if [[ "$GITHUB_REF_TYPE" == tag ]]; then FLAGS+=(--provenance); else FLAGS+=(--dry-run); fi
+          if [[ "$VERSION" == *-* ]]; then FLAGS+=(--tag next); fi
+
+          # Skip packages already at this version, so a failed run can be re-run.
+          publish() {
+            local name
+            name=$(node -p "require('./$1/package.json').name")
+            if npm view "$name@$VERSION" version >/dev/null 2>&1; then
+              echo "$name@$VERSION is already published"
+            else
+              npm publish "./$1" "${FLAGS[@]}"
+            fi
+          }
+
+          # Platform packages first, so rsdom's optionalDependencies resolve as soon as it is published.
+          for dir in npm/*/; do publish "${dir%/}"; done
+          node scripts/release/platform-packages.js prepublish
+          publish .
+          publish packages/jest-environment-rsdom
+          publish packages/vitest-environment-rsdom

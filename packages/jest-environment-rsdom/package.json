@@ -1,0 +1,36 @@
+{
+  "name": "jest-environment-rsdom",
+  "version": "0.1.0",
+  "description": "A Jest test environment backed by rsdom, a jsdom fork with a Rust core",
+  "keywords": [
+    "jest",
+    "jest-environment",
+    "jsdom",
+    "rsdom",
+    "dom"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sagiereder/rsdom.git",
+    "directory": "packages/jest-environment-rsdom"
+  },
+  "main": "./index.js",
+  "exports": {
+    ".": "./index.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js"
+  ],
+  "dependencies": {
+    "@jest/environment": "^30.0.0",
+    "@jest/fake-timers": "^30.0.0",
+    "jest-mock": "^30.0.0",
+    "jest-util": "^30.0.0",
+    "rsdom": "0.1.0"
+  },
+  "engines": {
+    "node": "^22.22.2 || ^24.15.0 || >=26.0.0"
+  }
+}

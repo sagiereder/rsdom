@@ -4,10 +4,11 @@ rsdom is a fork of jsdom 30.1.2 that makes it faster without changing behaviour.
 
 ## Layout
 
-- `src/`: the library. `src/api.js` is the entry point, and `src/jsdom/living/` holds the web platform implementation. Each interface is a Web IDL file plus an `*-impl.js` file, and `npm run prepare` generates the wrappers into `src/jsdom/living/generated/`.
+- `src/`: the library. `src/api.js` is the entry point, and `src/jsdom/living/` holds the web platform implementation. Each interface is a Web IDL file plus an `*-impl.js` file, and `npm run prepare` generates the wrappers into `src/generated/`. `src/integrations/` holds the Jest and Vitest environments (`rsdom/jest`, `rsdom/vitest`).
 - `src/native/`: the Rust addon (napi-rs, with html5ever vendored under `vendor/`). Build it with `node src/native/build.js`. `src/jsdom/native.js` loads it.
 - `tests/`: the jsdom API tests (`tests/api/`), legacy Mocha tests (`tests/to-port-to-wpts/`) and web-platform-tests (`tests/web-platform-tests/`). See [tests/README.md](tests/README.md).
 - `bench/`: benchmarks against upstream jsdom 30.1.2.
+- `npm/<platform>/`: the per-platform packages (`rsdom-darwin-arm64` and so on) that carry the prebuilt addon. `packages/`: `jest-environment-rsdom` and `vitest-environment-rsdom`.
 - `scripts/`: code generators and developer tools (`scripts/dev/test.js` is the fast test runner).
 
 ## Workflow
@@ -16,6 +17,18 @@ rsdom is a fork of jsdom 30.1.2 that makes it faster without changing behaviour.
 2. Make your change. Any native fast path must have a JS equivalent that behaves identically.
 3. Run `node scripts/dev/test.js` for the tests relevant to your change, then `node scripts/dev/test.js --all` with and without `JSDOM_NATIVE=0` before you submit. Run `npm run lint` as well.
 4. For performance work, run `node bench/run.js` (or `--filter <area>`) before and after, and include the numbers.
+
+## Publishing
+
+Releases are published by [.github/workflows/release.yml](.github/workflows/release.yml) from a `v*` tag. Nothing is published from a developer machine.
+
+1. Bump `version` in `package.json`, then run `node scripts/release/platform-packages.js sync`. It moves `npm/*/package.json`, the `packages/*` wrappers and their `rsdom` dependency to the same version. `node scripts/release/platform-packages.js check` verifies them, and the workflow runs it too.
+2. Commit, then tag and push: `git tag v<version> && git push origin v<version>`.
+3. The workflow builds the addon for every platform in `scripts/release/platforms.js`. macOS and Windows build natively, and Linux builds use `cargo zigbuild`, so the glibc builds target glibc 2.17. It smoke-tests each binary, then publishes with the `NPM_TOKEN` secret and provenance, in this order: the `rsdom-<platform>` packages, `rsdom`, `jest-environment-rsdom` and `vitest-environment-rsdom`. Versions that are already published are skipped, so a failed run can be re-run. Prerelease versions (`1.0.0-beta.1`) go to the `next` dist-tag.
+
+`rsdom`'s `optionalDependencies` on the platform packages are added at publish time by `platform-packages.js prepublish`. They are not committed, because listing versions that aren't on the registry yet would break `npm ci`. `prepack` runs `npm run prepare`, so the generated wrappers in `src/generated/` (which are gitignored) are always in the tarball.
+
+To check a release locally without publishing, run `node src/native/build.js`, then `node scripts/release/platform-packages.js local` (which copies the addon into the host's `npm/<platform>/`), then `npm pack` and `npm pack ./npm/<platform>`. Install both tarballs into a scratch project. Running the workflow by hand (`workflow_dispatch`) does the full build and a `npm publish --dry-run`.
 
 ## AI-assisted contributions
 
