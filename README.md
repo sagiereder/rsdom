@@ -147,4 +147,4 @@ Regenerate this table with `node bench/report.js` after a full `node bench/run.j
 
 ## Credits and licence
 
-rsdom is built on [jsdom](https://github.com/jsdom/jsdom) by Elijah Insua, Domenic Denicola and the jsdom contributors. jsdom's MIT licence is kept in [LICENSE.txt](LICENSE.txt). rsdom's own changes are MIT-licensed as well (see [LICENSE](LICENSE)). The vendored html5ever sources under `src/native/vendor/` keep their original MIT/Apache-2.0 licences.
+rsdom is a fork of [jsdom](https://github.com/jsdom/jsdom) and is MIT-licensed; see [LICENSE](LICENSE), which keeps jsdom's original copyright notice as its licence requires. The vendored html5ever sources under `src/native/vendor/` keep their original MIT/Apache-2.0 licences.

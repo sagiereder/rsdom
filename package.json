@@ -128,7 +128,6 @@
     "!src/native/",
     "!src/**/*.webidl",
     "LICENSE",
-    "LICENSE.txt",
     "README.md"
   ],
   "main": "./src/api.js",

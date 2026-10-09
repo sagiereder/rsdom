@@ -2,7 +2,7 @@
 
 // Portions adapted from SymbolTree (https://github.com/jsdom/js-symbol-tree).
 // Copyright (c) 2015 Joris van der Wel
-// Licensed under the MIT license; see LICENSE.txt.
+// Licensed under the MIT license; see LICENSE.
 
 const NODE_DOCUMENT_POSITION = require("../node-document-position");
 
