@@ -4,3 +4,5 @@ use napi_derive::napi;
 pub fn native_version() -> String {
     env!("CARGO_PKG_VERSION").to_string()
 }
+
+pub mod html_parser;
