@@ -10,8 +10,8 @@ WORKFLOW=release.yml
 DRY=${1:-}
 NPM="npx -y npm@latest"
 
-NAMES=(rsdom jest-environment-rsdom vitest-environment-rsdom)
-while read -r p; do NAMES+=("rsdom-$p"); done < <(node -p "require('./scripts/release/platforms.js').map(p => p.name).join('\n')")
+NAMES=(@rsdom/core @rsdom/jest @rsdom/vitest)
+while read -r p; do NAMES+=("@rsdom/core-$p"); done < <(node -p "require('./scripts/release/platforms.js').map(p => p.name).join('\n')")
 
 run() { echo "+ $*"; if [[ "$DRY" != --dry-run ]]; then "$@"; fi; }
 
