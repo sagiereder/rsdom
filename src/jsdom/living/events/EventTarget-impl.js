@@ -424,6 +424,8 @@ function updateEventTargets(eventImpl, struct) {
 function innerInvokeEventListeners(eventImpl, item, typeListeners, capturing, itemInShadowTree) {
   const { type } = eventImpl;
   const window = eventImpl.target._globalObject;
+  // Window's current event lives on a plain holder object: writes to the window (the vm global) are slow.
+  const eventState = window ? window._eventState : undefined;
   const thisArg = eventImpl.currentTarget;
   let eventWrapper;
 
@@ -442,10 +444,10 @@ function innerInvokeEventListeners(eventImpl, item, typeListeners, capturing, it
       }
 
       let currentEvent;
-      if (window) {
-        currentEvent = window._currentEvent;
+      if (eventState) {
+        currentEvent = eventState.current;
         if (!itemInShadowTree) {
-          window._currentEvent = eventImpl;
+          eventState.current = eventImpl;
         }
       }
 
@@ -476,8 +478,8 @@ function innerInvokeEventListeners(eventImpl, item, typeListeners, capturing, it
 
       eventImpl._inPassiveListenerFlag = false;
 
-      if (window) {
-        window._currentEvent = currentEvent;
+      if (eventState) {
+        eventState.current = currentEvent;
       }
 
       if (eventImpl._stopImmediatePropagationFlag) {

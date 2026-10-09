@@ -225,7 +225,8 @@ function installOwnProperties(window, { settings, documentOptions, commonForOrig
   window._length = 0;
 
   // https://dom.spec.whatwg.org/#window-current-event
-  window._currentEvent = undefined;
+  // Stored on a plain holder object, since writes to the window (the vm global object) are slow.
+  window._eventState = { current: undefined };
 
   // Some properties (such as localStorage and sessionStorage) share data
   // between windows in the same origin. This object is intended
@@ -432,7 +433,8 @@ function installOwnProperties(window, { settings, documentOptions, commonForOrig
       return window._customElementRegistry;
     },
     get event() {
-      return window._currentEvent ? idlUtils.wrapperForImpl(window._currentEvent) : undefined;
+      const { current } = window._eventState;
+      return current ? idlUtils.wrapperForImpl(current) : undefined;
     }
   });
 
