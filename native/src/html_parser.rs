@@ -13,6 +13,7 @@
 use std::borrow::Cow;
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
+use std::hash::{BuildHasherDefault, Hasher};
 
 use html5ever::interface::{ElemName, ElementFlags, NodeOrText, QuirksMode, TreeSink};
 use html5ever::tendril::{StrTendril, TendrilSink};
@@ -74,8 +75,6 @@ struct Node {
   last: u32,
   template_contents: u32,
   aip: bool,
-  // Text nodes: index of the pending string buffer that accumulates merged text.
-  text_slot: u32,
 }
 
 impl Node {
@@ -90,20 +89,57 @@ impl Node {
       last: NONE,
       template_contents: NONE,
       aip: false,
-      text_slot: NONE,
     }
   }
+}
+
+// Atoms hash to a precomputed 32-bit value, so a trivial multiplicative hasher beats the default SipHash here.
+#[derive(Default)]
+struct AtomHasher(u64);
+
+impl Hasher for AtomHasher {
+  fn finish(&self) -> u64 {
+    self.0
+  }
+  fn write(&mut self, bytes: &[u8]) {
+    for &b in bytes {
+      self.0 = (self.0.rotate_left(5) ^ b as u64).wrapping_mul(0x51_7c_c1_b7_27_22_0a_95);
+    }
+  }
+  fn write_u32(&mut self, n: u32) {
+    self.0 = (self.0.rotate_left(5) ^ n as u64).wrapping_mul(0x51_7c_c1_b7_27_22_0a_95);
+  }
+  fn write_u64(&mut self, n: u64) {
+    self.0 = (self.0.rotate_left(5) ^ n).wrapping_mul(0x51_7c_c1_b7_27_22_0a_95);
+  }
+}
+
+// Appends `s` to `strings`, returning its (offset, length) in UTF-16 code units.
+fn append_string(strings: &mut String, utf16_len: &Cell<u32>, s: &str) -> (u32, u32) {
+  let off = utf16_len.get();
+  let len = if s.is_ascii() {
+    s.len() as u32
+  } else {
+    s.encode_utf16().count() as u32
+  };
+  strings.push_str(s);
+  utf16_len.set(off + len);
+  (off, len)
 }
 
 pub struct Sink {
   nodes: RefCell<Vec<Node>>,
   ops: RefCell<Vec<u32>>,
-  // Strings referenced by (offset, len) ops. Text slots may still grow (merging), so each op that references a slot
-  // records the position of its (off, len) pair in `ops` and gets patched at the end.
-  slots: RefCell<Vec<String>>,
-  slot_refs: RefCell<Vec<(u32, usize)>>, // (slot, ops index of offset field)
-  names: RefCell<HashMap<LocalName, u32>>,
-  name_list: RefCell<Vec<LocalName>>,
+  // Every string the ops reference, and its length in UTF-16 code units.
+  strings: RefCell<String>,
+  utf16_len: Cell<u32>,
+  // The open text node's data, which may still grow (merging), and the index in `ops` of the (off, len) pair that
+  // references it; it is appended to `strings` and the pair patched once another text node is created, or at the end.
+  pending_text: RefCell<String>,
+  pending_ref: Cell<usize>,
+  names: RefCell<HashMap<LocalName, u32, BuildHasherDefault<AtomHasher>>>,
+  // (offset, length) of each name in `strings`, indexed by name id.
+  name_table: RefCell<Vec<u32>>,
   stack: RefCell<Vec<u32>>,
   // Fragment mode: the root <html> element is virtual (it stands for the DocumentFragment, which JS supplies).
   fragment: bool,
@@ -136,18 +172,18 @@ impl ElemName for Name<'_> {
 
 impl Sink {
   fn new(fragment: bool) -> Sink {
-    let mut name_list = Vec::new();
-    let mut names = HashMap::new();
+    let mut names = HashMap::default();
     // Name id 0 is the empty string (used for "no prefix").
     names.insert(LocalName::from(""), 0);
-    name_list.push(LocalName::from(""));
     Sink {
       nodes: RefCell::new(vec![Node::new(Kind::Document)]),
       ops: RefCell::new(Vec::with_capacity(1024)),
-      slots: RefCell::new(Vec::new()),
-      slot_refs: RefCell::new(Vec::new()),
+      strings: RefCell::new(String::new()),
+      utf16_len: Cell::new(0),
+      pending_text: RefCell::new(String::new()),
+      pending_ref: Cell::new(usize::MAX),
       names: RefCell::new(names),
-      name_list: RefCell::new(name_list),
+      name_table: RefCell::new(vec![0, 0]),
       stack: RefCell::new(Vec::new()),
       fragment,
       virtual_root: Cell::new(NONE),
@@ -166,29 +202,38 @@ impl Sink {
     if let Some(&id) = self.names.borrow().get(name) {
       return id;
     }
-    let mut list = self.name_list.borrow_mut();
-    let id = list.len() as u32;
-    list.push(name.clone());
+    let mut table = self.name_table.borrow_mut();
+    let id = (table.len() / 2) as u32;
+    let (off, len) = append_string(&mut self.strings.borrow_mut(), &self.utf16_len, name);
+    table.push(off);
+    table.push(len);
     self.names.borrow_mut().insert(name.clone(), id);
     id
   }
 
-  fn new_slot(&self, s: String) -> u32 {
-    let mut slots = self.slots.borrow_mut();
-    slots.push(s);
-    (slots.len() - 1) as u32
+  // Pushes the (off, len) pair of the open text node, patched by `flush_pending_text()`.
+  fn push_text_ref(&self, ops: &mut Vec<u32>) {
+    self.pending_ref.set(ops.len());
+    ops.push(0);
+    ops.push(0);
   }
 
-  // Pushes an (off, len) placeholder referencing `slot`.
-  fn push_slot_ref(&self, ops: &mut Vec<u32>, slot: u32) {
-    self.slot_refs.borrow_mut().push((slot, ops.len()));
-    ops.push(0);
-    ops.push(0);
+  fn flush_pending_text(&self, ops: &mut [u32]) {
+    let idx = self.pending_ref.replace(usize::MAX);
+    if idx == usize::MAX {
+      return;
+    }
+    let mut pending = self.pending_text.borrow_mut();
+    let (off, len) = append_string(&mut self.strings.borrow_mut(), &self.utf16_len, &pending);
+    pending.clear();
+    ops[idx] = off;
+    ops[idx + 1] = len;
   }
 
   fn push_str(&self, ops: &mut Vec<u32>, s: &str) {
-    let slot = self.new_slot(s.to_owned());
-    self.push_slot_ref(ops, slot);
+    let (off, len) = append_string(&mut self.strings.borrow_mut(), &self.utf16_len, s);
+    ops.push(off);
+    ops.push(len);
   }
 
   fn push_attrs(&self, ops: &mut Vec<u32>, attrs: &[Attribute]) {
@@ -271,25 +316,22 @@ impl Sink {
     if id == NONE || id != self.open_text.get() {
       return false;
     }
-    let slot = {
-      let nodes = self.nodes.borrow();
-      let n = &nodes[id as usize];
-      if n.kind != Kind::Text {
-        return false;
-      }
-      n.text_slot
-    };
-    self.slots.borrow_mut()[slot as usize].push_str(text);
+    if self.nodes.borrow()[id as usize].kind != Kind::Text {
+      return false;
+    }
+    // The open text node is always the pending one (see `new_text()`).
+    self.pending_text.borrow_mut().push_str(text);
     true
   }
 
-  fn new_text(&self, text: &str) -> (u32, u32) {
-    let slot = self.new_slot(text.to_owned());
-    let mut node = Node::new(Kind::Text);
-    node.text_slot = slot;
-    let id = self.alloc(node);
+  // Creates a text node, which becomes the open (pending) one; the caller must then push its reference with
+  // `push_text_ref()`.
+  fn new_text(&self, text: &str) -> u32 {
+    self.flush_pending_text(&mut self.ops.borrow_mut());
+    self.pending_text.borrow_mut().push_str(text);
+    let id = self.alloc(Node::new(Kind::Text));
     self.open_text.set(id);
-    (id, slot)
+    id
   }
 
   fn is_virtual(&self, id: u32) -> bool {
@@ -297,54 +339,14 @@ impl Sink {
   }
 
   fn finish_buffers(self) -> (Vec<u32>, String) {
-    let Sink {
-      ops,
-      slots,
-      slot_refs,
-      name_list,
-      ..
-    } = self;
-    let body = ops.into_inner();
-    let slots = slots.into_inner();
-    let slot_refs = slot_refs.into_inner();
-    let name_list = name_list.into_inner();
-
-    let mut strings = String::new();
-    let mut utf16_len: u32 = 0;
-    let mut push = |s: &str, strings: &mut String| -> (u32, u32) {
-      let off = utf16_len;
-      let len = if s.is_ascii() {
-        s.len() as u32
-      } else {
-        s.encode_utf16().count() as u32
-      };
-      strings.push_str(s);
-      utf16_len += len;
-      (off, len)
-    };
-
-    let mut header = Vec::with_capacity(1 + name_list.len() * 2);
-    header.push(name_list.len() as u32);
-    for name in &name_list {
-      let (off, len) = push(name, &mut strings);
-      header.push(off);
-      header.push(len);
-    }
-
-    let mut slot_pos: Vec<(u32, u32)> = Vec::with_capacity(slots.len());
-    for s in &slots {
-      slot_pos.push(push(s, &mut strings));
-    }
-
-    let base = header.len();
-    let mut out = header;
+    self.flush_pending_text(&mut self.ops.borrow_mut());
+    let body = self.ops.into_inner();
+    let name_table = self.name_table.into_inner();
+    let mut out = Vec::with_capacity(1 + name_table.len() + body.len());
+    out.push((name_table.len() / 2) as u32);
+    out.extend_from_slice(&name_table);
     out.extend_from_slice(&body);
-    for (slot, idx) in slot_refs {
-      let (off, len) = slot_pos[slot as usize];
-      out[base + idx] = off;
-      out[base + idx + 1] = len;
-    }
-    (out, strings)
+    (out, self.strings.into_inner())
   }
 }
 
@@ -440,12 +442,12 @@ impl TreeSink for Sink {
             return;
           }
         }
-        let (id, slot) = self.new_text(&text);
+        let id = self.new_text(&text);
         self.append_arena(parent, id);
         let mut ops = self.ops.borrow_mut();
         ops.push(OP_APPEND_TEXT);
         ops.push(parent);
-        self.push_slot_ref(&mut ops, slot);
+        self.push_text_ref(&mut ops);
       }
     }
   }
@@ -563,12 +565,12 @@ impl TreeSink for Sink {
             return;
           }
         }
-        let (id, slot) = self.new_text(&text);
+        let id = self.new_text(&text);
         self.insert_before_arena(sibling, id);
         let mut ops = self.ops.borrow_mut();
         ops.push(OP_INSERT_TEXT_BEFORE);
         ops.push(sibling);
-        self.push_slot_ref(&mut ops, slot);
+        self.push_text_ref(&mut ops);
       }
     }
   }
