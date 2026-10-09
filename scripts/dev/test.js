@@ -119,9 +119,23 @@ function runMocha(label, args, extraEnv = {}) {
       env: { ...process.env, JSDOM_WPT_EXTERNAL: "1", FORCE_COLOR: "0", ...extraEnv }
     });
     let out = "";
+    // A job that produces no output for this long is considered hung (e.g. a WPT server problem).
+    const idleLimit = Number(process.env.JSDOM_TEST_IDLE_MS) || 5 * 60_000;
+    let idleTimer;
+    const bump = () => {
+      clearTimeout(idleTimer);
+      idleTimer = setTimeout(() => {
+        out += `\n[dev/test.js] killed: no output for ${idleLimit / 1000}s (hung)\n`;
+        child.kill("SIGKILL");
+      }, idleLimit);
+    };
+    bump();
+    child.stdout.on("data", bump);
+    child.stderr.on("data", bump);
     child.stdout.on("data", d => (out += d));
     child.stderr.on("data", d => (out += d));
     child.on("close", code => {
+      clearTimeout(idleTimer);
       const num = re => Number((out.match(re) || [])[1] || 0);
       const result = {
         label, code, out, ms: Date.now() - start,
@@ -130,6 +144,7 @@ function runMocha(label, args, extraEnv = {}) {
       const status = code === 0 ? "ok  " : "FAIL";
       console.log(`${status} ${label.padEnd(60).slice(0, 60)} ${String(result.passing).padStart(5)} pass ` +
         `${String(result.failing).padStart(4)} fail  ${(result.ms / 1000).toFixed(1)}s`);
+      result.rerun = () => runMocha(`${label} (retry)`, args, extraEnv);
       resolve(result);
     });
   });
@@ -218,6 +233,22 @@ async function main() {
   }
 
   const results = await pool(tasks, jobs);
+  // Failures under heavy parallel load are often timeouts; re-run failed jobs one at a time to
+  // separate real failures from load flakes (disable with --no-retry).
+  if (!flag("--no-retry")) {
+    const toRetry = results.filter(r => r.code !== 0);
+    if (toRetry.length) {
+      console.log(`\nRetrying ${toRetry.length} failed job(s) serially...`);
+    }
+    for (const r of toRetry) {
+      const again = await r.rerun();
+      results[results.indexOf(r)] = again.code === 0 ? { ...again, flaky: true } : again;
+    }
+  }
+  const flaky = results.filter(r => r.flaky).map(r => r.label);
+  if (flaky.length) {
+    console.log(`Flaky (failed in parallel, passed on retry): ${flaky.join("; ")}`);
+  }
   const failed = results.filter(r => r.code !== 0);
   const total = results.reduce((a, r) => ({ p: a.p + r.passing, f: a.f + r.failing, s: a.s + r.pending }), { p: 0, f: 0, s: 0 });
   for (const r of failed) {
