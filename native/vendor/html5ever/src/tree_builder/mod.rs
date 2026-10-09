@@ -723,15 +723,7 @@ where
     }
 
     fn adoption_agency(&self, subject: LocalName) {
-        // 1.
-        if self.current_node_named(subject.clone())
-            && self
-                .position_in_active_formatting(&self.current_node())
-                .is_none()
-        {
-            self.pop();
-            return;
-        }
+        // 1. jsdom patch: parse5 8 does not implement this step (WPT adoption_agency_check_the_end_tag_name).
 
         // 2. 3. 4.
         for _ in 0..8 {

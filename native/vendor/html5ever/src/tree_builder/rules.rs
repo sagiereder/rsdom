@@ -862,9 +862,17 @@ where
                     ProcessResult::Done
                 },
 
-                Token::Tag(tag @ tag!(<math>)) => self.enter_foreign(tag, ns!(mathml)),
+                Token::Tag(tag @ tag!(<math>)) => {
+                    // jsdom patch: reconstruct the active formatting elements, as the spec and parse5 do.
+                    self.reconstruct_active_formatting_elements();
+                    self.enter_foreign(tag, ns!(mathml))
+                },
 
-                Token::Tag(tag @ tag!(<svg>)) => self.enter_foreign(tag, ns!(svg)),
+                Token::Tag(tag @ tag!(<svg>)) => {
+                    // jsdom patch: reconstruct the active formatting elements, as the spec and parse5 do.
+                    self.reconstruct_active_formatting_elements();
+                    self.enter_foreign(tag, ns!(svg))
+                },
 
                 Token::Tag(
                     tag!(<caption> | <col> | <colgroup> | <frame> | <head> |
