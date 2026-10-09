@@ -67,11 +67,14 @@ function changedFiles(base) {
 }
 
 function allWptDirs() {
-  const { checkToRunFile } = require(path.join(wptDir, "expectations-utils.js"));
+  const yaml = require("js-yaml");
   const { readManifest, getPossibleTestFilePaths } = require(path.join(wptDir, "wpt-manifest-utils.js"));
-  const manifest = readManifest(path.join(wptDir, "wpt-manifest.json"));
-  return checkToRunFile(path.join(wptDir, "to-run.yaml"), getPossibleTestFilePaths(manifest))
-    .map(g => ({ dir: g.dir, weight: g.testFilePaths.length }));
+  const files = getPossibleTestFilePaths(readManifest(path.join(wptDir, "wpt-manifest.json")));
+  const docs = yaml.loadAll(fs.readFileSync(path.join(wptDir, "to-run.yaml"), "utf8"));
+  return docs.filter(d => d && d.DIR).map(d => ({
+    dir: d.DIR,
+    weight: files.filter(f => f.startsWith(d.DIR + "/")).length
+  }));
 }
 
 function selectDirs(prefixes, dirs) {
