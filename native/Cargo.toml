@@ -8,6 +8,7 @@ crate-type = ["cdylib"]
 name = "jsdom_native"
 
 [dependencies]
+html5ever = { path = "vendor/html5ever" }
 napi = { version = "3", features = ["napi6"] }
 napi-derive = "3"
 
