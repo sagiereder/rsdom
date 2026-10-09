@@ -288,6 +288,59 @@ impl<Sink: TokenSink> Tokenizer<Sink> {
         }
     }
 
+    // jsdom patch: fast path for the tag name and attribute name states. Consumes the longest run of ASCII characters
+    // at the front of the input that the state would each just append (ASCII-lowercased) to the current tag or
+    // attribute name, and appends the run at once. Everything else (including '\r', NUL, non-ASCII, and characters
+    // that are parse errors) is left to the per-character path. Returns whether anything was consumed.
+    fn consume_name_run(&self, input: &BufferQueue, attribute: bool) -> bool {
+        if self.opts.exact_errors || self.reconsume.get() || self.ignore_lf.get() {
+            return false;
+        }
+        let Some(mut front) = input.peek_front_chunk_mut() else {
+            return false;
+        };
+        let bytes = front.as_bytes();
+        let mut len = 0;
+        let mut has_upper = false;
+        while len < bytes.len() {
+            let b = bytes[len];
+            let stop = match b {
+                b'\t' | b'\n' | b'\x0C' | b' ' | b'/' | b'>' | b'\0' | b'\r' => true,
+                b'=' | b'"' | b'\'' | b'<' => attribute,
+                0x80..=0xFF => true,
+                _ => false,
+            };
+            if stop {
+                break;
+            }
+            has_upper |= b.is_ascii_uppercase();
+            len += 1;
+        }
+        if len == 0 {
+            return false;
+        }
+        {
+            let mut name = if attribute {
+                self.current_attr_name.borrow_mut()
+            } else {
+                self.current_tag_name.borrow_mut()
+            };
+            let run = &front[..len];
+            if has_upper {
+                name.push_slice(&run.to_ascii_lowercase());
+            } else {
+                name.push_slice(run);
+            }
+        }
+        // The run is ASCII, so it ends on a char boundary.
+        front.pop_front(len as u32);
+        if front.is_empty() {
+            drop(front);
+            input.pop_front();
+        }
+        true
+    }
+
     fn pop_except_from(&self, input: &BufferQueue, set: SmallCharSet) -> Option<SetResult> {
         // Bail to the slow path for various corner cases.
         // This means that `FromSet` can contain characters not in the set!
@@ -903,6 +956,9 @@ impl<Sink: TokenSink> Tokenizer<Sink> {
 
             //§ tag-name-state
             states::TagName => loop {
+                if self.consume_name_run(input, false) {
+                    continue;
+                }
                 match get_char!(self, input) {
                     '\t' | '\n' | '\x0C' | ' ' => go!(self: to BeforeAttributeName),
                     '/' => go!(self: to SelfClosingStartTag),
@@ -1146,6 +1202,9 @@ impl<Sink: TokenSink> Tokenizer<Sink> {
 
             //§ attribute-name-state
             states::AttributeName => loop {
+                if self.consume_name_run(input, true) {
+                    continue;
+                }
                 match get_char!(self, input) {
                     '\t' | '\n' | '\x0C' | ' ' => go!(self: to AfterAttributeName),
                     '/' => go!(self: to SelfClosingStartTag),
