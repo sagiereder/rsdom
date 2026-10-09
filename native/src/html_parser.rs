@@ -6,8 +6,8 @@
 //! performing exactly the operations jsdom's parse5 tree adapter performs.
 //!
 //! Wire format (all u32):
-//!   ops[0] = name count N, then N pairs (offset, length) into `strings` (UTF-16 code units)
-//!   followed by instructions; see the OP_* constants (mirrored in html-native.js).
+//!   ops[0] = index T of the name table, then instructions (see the OP_* constants, mirrored in html-native.js) up to
+//!   T; ops[T] = name count N, then N pairs (offset, length) into `strings` (UTF-16 code units).
 //! Free-form strings (text, comments, attribute values) are referenced as (offset, length) pairs into `strings`.
 
 use std::borrow::Cow;
@@ -171,14 +171,20 @@ impl ElemName for Name<'_> {
 }
 
 impl Sink {
-  fn new(fragment: bool) -> Sink {
+  // `input_len` (in bytes) sizes the buffers, to avoid most reallocations.
+  fn new(fragment: bool, input_len: usize) -> Sink {
     let mut names = HashMap::default();
     // Name id 0 is the empty string (used for "no prefix").
     names.insert(LocalName::from(""), 0);
     Sink {
       nodes: RefCell::new(vec![Node::new(Kind::Document)]),
-      ops: RefCell::new(Vec::with_capacity(1024)),
-      strings: RefCell::new(String::new()),
+      // ops[0] is reserved for the index of the name table.
+      ops: RefCell::new({
+        let mut ops = Vec::with_capacity(1024 + input_len / 3);
+        ops.push(0);
+        ops
+      }),
+      strings: RefCell::new(String::with_capacity(input_len)),
       utf16_len: Cell::new(0),
       pending_text: RefCell::new(String::new()),
       pending_ref: Cell::new(usize::MAX),
@@ -340,13 +346,12 @@ impl Sink {
 
   fn finish_buffers(self) -> (Vec<u32>, String) {
     self.flush_pending_text(&mut self.ops.borrow_mut());
-    let body = self.ops.into_inner();
+    let mut ops = self.ops.into_inner();
     let name_table = self.name_table.into_inner();
-    let mut out = Vec::with_capacity(1 + name_table.len() + body.len());
-    out.push((name_table.len() / 2) as u32);
-    out.extend_from_slice(&name_table);
-    out.extend_from_slice(&body);
-    (out, self.strings.into_inner())
+    ops[0] = ops.len() as u32;
+    ops.push((name_table.len() / 2) as u32);
+    ops.extend_from_slice(&name_table);
+    (ops, self.strings.into_inner())
   }
 }
 
@@ -657,7 +662,7 @@ fn finish(sink: Sink) -> ParsedHtml {
 /// Parses a whole HTML document.
 #[napi]
 pub fn parse_html_document(markup: String, scripting_enabled: bool) -> ParsedHtml {
-  let sink = Sink::new(false);
+  let sink = Sink::new(false, markup.len());
   let parser = html5ever::parse_document(sink, tree_builder_opts(scripting_enabled));
   let sink = parser.one(StrTendril::from(markup));
   finish(sink)
@@ -675,7 +680,7 @@ pub fn parse_html_fragment(
   has_form: bool,
   scripting_enabled: bool,
 ) -> ParsedHtml {
-  let sink = Sink::new(true);
+  let sink = Sink::new(true, markup.len());
   sink.placeholder.set(true);
   let ns = match context_ns {
     1 => ns!(html),
