@@ -1,5 +1,5 @@
 "use strict";
-// The prebuilt-binary platforms. Each one is published as its own npm package, rsdom-<name>, from npm/<name>/,
+// The prebuilt-binary platforms. Each one is published as its own npm package, @rsdom/core-<name>, from npm/<name>/,
 // and listed in the main package's optionalDependencies. src/jsdom/native.js computes the same names at runtime.
 module.exports = [
   { name: "darwin-arm64", target: "aarch64-apple-darwin", os: "darwin", cpu: "arm64" },

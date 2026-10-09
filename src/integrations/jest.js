@@ -1,11 +1,11 @@
 "use strict";
-// A Jest test environment backed by rsdom: `testEnvironment: "rsdom/jest"` (or the jest-environment-rsdom package,
-// `testEnvironment: "rsdom"`).
+// A Jest test environment backed by rsdom: `testEnvironment: "@rsdom/jest"` (the @rsdom/jest package), or
+// `testEnvironment: "@rsdom/core/jest"`.
 //
 // This mirrors jest-environment-jsdom 30 (@jest/environment-jsdom-abstract) line for line, with rsdom in place of
 // jsdom, so `testEnvironmentOptions` (html, url, userAgent, customExportConditions and any JSDOM constructor option)
 // behave the same. The Jest packages it needs (jest-util, jest-mock, @jest/fake-timers) are optional peer dependencies:
-// they come with Jest. Package managers that don't hoist them (pnpm, Yarn PnP) should use jest-environment-rsdom,
+// they come with Jest. Package managers that don't hoist them (pnpm, Yarn PnP) should use @rsdom/jest,
 // which depends on them directly and passes them in through createEnvironment().
 const { Buffer: NodeBuffer } = require("node:buffer");
 const rsdom = require("../api.js");

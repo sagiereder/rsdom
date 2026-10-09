@@ -2,9 +2,9 @@ name: Release
 
 # Pushing a tag v<version> (matching package.json's version) builds the native addon for every platform in
 # scripts/release/platforms.js and publishes:
-#   - rsdom-<platform> (npm/<platform>/), one per prebuilt binary;
-#   - rsdom, with those packages added as optionalDependencies;
-#   - jest-environment-rsdom and vitest-environment-rsdom (packages/).
+#   - @rsdom/core-<platform> (npm/<platform>/), one per prebuilt binary;
+#   - @rsdom/core, with those packages added as optionalDependencies;
+#   - @rsdom/jest and @rsdom/vitest (packages/jest/, packages/vitest/).
 # Running the workflow by hand builds everything and does a `npm publish --dry-run` rehearsal instead.
 # Publishing uses npm trusted publishing (OIDC): no token secret. Every package must have a trusted publisher for
 # sagiereder/rsdom + release.yml (scripts/release/bootstrap-trusted-publishing.sh sets that up once).
@@ -159,9 +159,9 @@ jobs:
             fi
           }
 
-          # Platform packages first, so rsdom's optionalDependencies resolve as soon as it is published.
+          # Platform packages first, so @rsdom/core's optionalDependencies resolve as soon as it is published.
           for dir in npm/*/; do publish "${dir%/}"; done
           node scripts/release/platform-packages.js prepublish
           publish .
-          publish packages/jest-environment-rsdom
-          publish packages/vitest-environment-rsdom
+          publish packages/jest
+          publish packages/vitest

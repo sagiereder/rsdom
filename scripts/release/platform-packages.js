@@ -1,11 +1,11 @@
 "use strict";
 /* eslint-disable no-console */
-// Maintains the per-platform binary packages in npm/<platform>/ (rsdom-darwin-arm64 and so on).
+// Maintains the per-platform binary packages in npm/<platform>/ (@rsdom/core-darwin-arm64 and so on).
 //
 //   node scripts/release/platform-packages.js sync
 //       Rewrites every npm/<platform>/package.json from scripts/release/platforms.js, at the root package's version,
-//       and moves the packages/* wrappers (jest-environment-rsdom, vitest-environment-rsdom) and their rsdom
-//       dependency to that version. Run it after bumping the version.
+//       and moves the packages/* wrappers (@rsdom/jest, @rsdom/vitest) and their @rsdom/core dependency to that
+//       version. Run it after bumping the version.
 //   node scripts/release/platform-packages.js prepublish
 //       Adds the platform packages to the root package.json's optionalDependencies, at the root version. CI runs this
 //       just before `npm publish`. It is not committed: until a version's platform packages exist on the registry,
@@ -29,7 +29,7 @@ const rootPkg = JSON.parse(fs.readFileSync(rootPkgPath, "utf8"));
 const { version } = rootPkg;
 
 function packageName(p) {
-  return `rsdom-${p.name}`;
+  return `${rootPkg.name}-${p.name}`;
 }
 
 function binaryName(p) {
@@ -46,7 +46,7 @@ function wrapperDirs() {
 
 function wrapperManifest(dir) {
   const pkg = JSON.parse(fs.readFileSync(path.join(dir, "package.json"), "utf8"));
-  return { ...pkg, version, dependencies: { ...pkg.dependencies, rsdom: version } };
+  return { ...pkg, version, dependencies: { ...pkg.dependencies, [rootPkg.name]: version } };
 }
 
 function manifest(p) {
@@ -58,6 +58,7 @@ function manifest(p) {
     repository: rootPkg.repository,
     main: binaryName(p),
     files: [binaryName(p)],
+    publishConfig: { access: "public" },
     os: [p.os],
     cpu: [p.cpu],
     ...p.libc ? { libc: [p.libc] } : {},
@@ -75,9 +76,9 @@ function sync() {
     writeJSON(path.join(packageDir(p), "package.json"), manifest(p));
     fs.writeFileSync(
       path.join(packageDir(p), "README.md"),
-      `# ${packageName(p)}\n\nThe \`${p.target}\` native addon for [rsdom](https://www.npmjs.com/package/rsdom). ` +
-      "Don't install it directly: rsdom lists it as an optional dependency, and npm installs the one that matches " +
-      "your platform.\n"
+      `# ${packageName(p)}\n\nThe \`${p.target}\` native addon for rsdom ` +
+      `([${rootPkg.name}](https://www.npmjs.com/package/${rootPkg.name})). Don't install it directly: ` +
+      `${rootPkg.name} lists it as an optional dependency, and npm installs the one that matches your platform.\n`
     );
   }
   for (const dir of wrapperDirs()) {

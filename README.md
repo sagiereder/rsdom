@@ -1,6 +1,6 @@
 # rsdom
 
-rsdom is a drop-in fork of [jsdom](https://github.com/jsdom/jsdom) with a Rust core for its hot paths. It keeps jsdom 30.1.2's public API, so `const { JSDOM } = require("rsdom")` works wherever `require("jsdom")` did. The same test suite passes: the jsdom API tests, the ported legacy tests, and every web-platform-test that jsdom 30.1.2 runs.
+rsdom is a drop-in fork of [jsdom](https://github.com/jsdom/jsdom) with a Rust core for its hot paths. It keeps jsdom 30.1.2's public API, so `const { JSDOM } = require("@rsdom/core")` works wherever `require("jsdom")` did. The same test suite passes: the jsdom API tests, the ported legacy tests, and every web-platform-test that jsdom 30.1.2 runs.
 
 For the API itself (`new JSDOM()`, options, `runScripts`, resource loading, virtual consoles and so on), see the upstream documentation in [docs/jsdom-api.md](docs/jsdom-api.md). Everything there applies to rsdom.
 
@@ -20,10 +20,14 @@ jsdom is the DOM behind most JavaScript test runners (Jest, Vitest and Testing L
 ## Install
 
 ```sh
-npm install rsdom
+npm install @rsdom/core
 ```
 
-npm also installs the prebuilt addon for your platform: macOS (arm64 or x64), Linux (x64 or arm64 with glibc, or x64 with musl) or Windows (x64). It comes from a package such as `rsdom-darwin-arm64`, which rsdom lists as an optional dependency. On other platforms, or with `--omit=optional`, rsdom runs on its pure-JS paths and behaves the same, just slower.
+```js
+const { JSDOM } = require("@rsdom/core");
+```
+
+npm also installs the prebuilt addon for your platform: macOS (arm64 or x64), Linux (x64 or arm64 with glibc, or x64 with musl) or Windows (x64). It comes from a package such as `@rsdom/core-darwin-arm64`, which `@rsdom/core` lists as an optional dependency. On other platforms, or with `--omit=optional`, rsdom runs on its pure-JS paths and behaves the same, just slower.
 
 ## Use with Jest / Vitest
 
@@ -32,25 +36,25 @@ rsdom ships test environments that mirror `jest-environment-jsdom` and Vitest's 
 ### Jest
 
 ```sh
-npm install --save-dev rsdom
+npm install --save-dev @rsdom/jest
 ```
 
 ```js
 // jest.config.js
 module.exports = {
-  testEnvironment: "rsdom/jest",
+  testEnvironment: "@rsdom/jest",
   // Optional, same as with jest-environment-jsdom: html, url, userAgent, customExportConditions,
   // or any JSDOM constructor option.
   testEnvironmentOptions: { url: "http://localhost/" }
 };
 ```
 
-`rsdom/jest` uses the `jest-util`, `jest-mock` and `@jest/fake-timers` that come with Jest. If your package manager doesn't hoist them (pnpm, Yarn PnP), install `jest-environment-rsdom` instead, which depends on them directly, and use `testEnvironment: "rsdom"`. A per-file `/** @jest-environment rsdom/jest */` docblock works too.
+`@rsdom/jest` depends on `@rsdom/core` and on the Jest packages it needs, so it works under every package manager. A per-file `/** @jest-environment @rsdom/jest */` docblock works too. `@rsdom/core` also has the environment built in as `testEnvironment: "@rsdom/core/jest"`, which uses the `jest-util`, `jest-mock` and `@jest/fake-timers` that come with Jest. That only works when your package manager hoists them (npm, or Yarn's `node_modules` linker).
 
 ### Vitest
 
 ```sh
-npm install --save-dev rsdom vitest-environment-rsdom
+npm install --save-dev @rsdom/vitest
 ```
 
 ```js
@@ -59,14 +63,23 @@ import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   test: {
-    environment: "rsdom",
+    environment: "./node_modules/@rsdom/vitest",
     // Optional, the same options as Vitest's jsdom environment. `environmentOptions.jsdom` is read too.
     environmentOptions: { rsdom: { url: "http://localhost:3000" } }
   }
 });
 ```
 
-Vitest resolves `environment: "rsdom"` to the `vitest-environment-rsdom` package. Without that package, point at the file directly: `environment: "./node_modules/rsdom/src/integrations/vitest.js"`. A per-file `// @vitest-environment rsdom` comment works too. All pools are supported, including `vmThreads` and `vmForks`.
+Use the path, not `environment: "@rsdom/vitest"`. Vitest resolves a name that isn't built in only as the package `vitest-environment-<name>`, so a scoped package can't be given by name. A value that starts with `.` or `/` is loaded as a file, relative to the project root. If `@rsdom/vitest` isn't installed in the project root's `node_modules` (a workspace package with dependencies hoisted to the repository root, or Yarn PnP), resolve it instead:
+
+```js
+import { fileURLToPath } from "node:url";
+
+// in test: { ... }
+environment: fileURLToPath(import.meta.resolve("@rsdom/vitest")),
+```
+
+Without `@rsdom/vitest`, point at the environment inside `@rsdom/core`: `environment: "./node_modules/@rsdom/core/src/integrations/vitest.js"`. Vitest's per-file `// @vitest-environment` comment only accepts names, so it can't select rsdom for a single file. All pools are supported, including `vmThreads` and `vmForks`.
 
 ## Build from source
 

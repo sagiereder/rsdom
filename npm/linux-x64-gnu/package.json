@@ -1,5 +1,5 @@
 {
-  "name": "rsdom-linux-x64-gnu",
+  "name": "@rsdom/core-linux-x64-gnu",
   "version": "0.1.0",
   "description": "The x86_64-unknown-linux-gnu binary for rsdom, a jsdom fork with a Rust core",
   "license": "MIT",
@@ -11,6 +11,9 @@
   "files": [
     "rsdom.linux-x64-gnu.node"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "os": [
     "linux"
   ],
