@@ -1,5 +1,5 @@
 {
-  "name": "rsdom",
+  "name": "@rsdom/core",
   "version": "0.1.0",
   "description": "A drop-in, API-compatible fork of jsdom with a Rust core for its hot paths",
   "keywords": [
@@ -130,6 +130,9 @@
     "LICENSE",
     "README.md"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "main": "./src/api.js",
   "exports": {
     ".": "./src/api.js",

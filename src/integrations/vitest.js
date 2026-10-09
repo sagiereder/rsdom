@@ -1,6 +1,8 @@
 "use strict";
-// A Vitest environment backed by rsdom: `environment: "rsdom"` (through the vitest-environment-rsdom package), or
-// a path to this file, e.g. `environment: "./node_modules/rsdom/src/integrations/vitest.js"`.
+// A Vitest environment backed by rsdom, used through the @rsdom/vitest package (`environment:
+// "./node_modules/@rsdom/vitest"`) or a path to this file (`environment:
+// "./node_modules/@rsdom/core/src/integrations/vitest.js"`). Vitest resolves a bare name only as
+// `vitest-environment-<name>`, so a scoped package can't be given by name.
 //
 // This mirrors Vitest's built-in jsdom environment (vitest/src/integrations/env/jsdom.ts) with rsdom in place of
 // jsdom. Options are read from `environmentOptions.rsdom`, falling back to `environmentOptions.jsdom` so a project can
@@ -76,8 +78,8 @@ function createDOM(options = {}) {
   });
 }
 
-// Vitest keys per-file `@vitest-environment-options` by the environment's name as written: "rsdom", or a path to this
-// file. Config-level `environmentOptions` can use "rsdom" or "jsdom".
+// Vitest keys per-file `@vitest-environment-options` by the environment's name as written, which is a path containing
+// "rsdom" (e.g. ./node_modules/@rsdom/vitest). Config-level `environmentOptions` can use "rsdom" or "jsdom".
 function environmentOptions(options) {
   const byPath = Object.keys(options).find(key => key.includes("rsdom"));
   return options.rsdom ?? (byPath ? options[byPath] : undefined) ?? options.jsdom ?? {};
