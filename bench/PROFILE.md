@@ -2,7 +2,7 @@
 
 This file sets the performance targets for moving jsdom hot paths to Rust. It covers:
 
-- the scenarios in `bench-rs/scenarios/`
+- the scenarios in `bench/scenarios/`
 - the baseline timings, with upstream jsdom@30.1.2, the fork with JS only, and the fork with native enabled
 - the CPU hotspots for each scenario group
 - a ranked list of what should move to Rust and what should be fixed in JS
@@ -130,16 +130,16 @@ The profiles below were taken with `--impl fork-js`, 4 iterations. Percentages a
 
 ### Parsing: divs, lists, large, and tables innerHTML / `new JSDOM`
 
-parse5's tokenizer and tree builder take only **12–20%** of self time. Most of the cost is jsdom's per-node tree insertion, which the parse5 adapter in `lib/jsdom/browser/parser/html.js` triggers for every node.
+parse5's tokenizer and tree builder take only **12–20%** of self time. Most of the cost is jsdom's per-node tree insertion, which the parse5 adapter in `src/jsdom/browser/parser/html.js` triggers for every node.
 
 | % (large/innerHTML-parse) | function |
 |--:|---|
-| 44% incl | `_insert` `lib/jsdom/living/nodes/Node-impl.js:1012` (self 13.6%) |
+| 44% incl | `_insert` `src/jsdom/living/nodes/Node-impl.js:1012` (self 13.6%) |
 | 9% | GC |
 | 5.3% | `_remove` `Node-impl.js:1202` |
 | 5.1% | `_invalidateCaches` `Node-impl.js:472` |
 | 5.0% / 4.9% | `get parentNode` `Node-impl.js:291`, `getRootNode` `Node-impl.js:367` |
-| 3.7% | `next` `lib/jsdom/living/helpers/dom-tree.js:116` |
+| 3.7% | `next` `src/jsdom/living/helpers/dom-tree.js:116` |
 | 20.6% incl | adapter `insertText` `html.js:139` (`lastChild.data += text` goes through `replaceData`) |
 | 15.5% incl | adapter `createElement` `html.js:60`, then `create-element.js:176` and the generated `setup` |
 | 13.3% incl | `_replaceAll` and `detachNode` → `remove()`: the fragment is built, then every node is moved |
@@ -163,7 +163,7 @@ Causes:
 |--:|---|
 | 36% / 19% | parse5 `serializeElement` `parse5/dist/serializer/index.js:115` |
 | 17–20% | `childrenToArray` `dom-tree.js:140`: the adapter allocates a child array for every node |
-| 9–10% | adapter `getTagName` / `getAttrList` / `getNamespaceURI` `lib/jsdom/living/domparsing/parse5-adapter-serialization.js` |
+| 9–10% | adapter `getTagName` / `getAttrList` / `getNamespaceURI` `src/jsdom/living/domparsing/parse5-adapter-serialization.js` |
 | 5% | `entities` `escapeWithRegex` |
 | 20% (tables) | GC from string concatenation |
 
@@ -189,7 +189,7 @@ There is also a one-off 9.5% for the `document` named-property cache build (`Doc
 
 ### Events
 
-- bubble-deep: 70% is in `lib/jsdom/living/events`. The main costs are:
+- bubble-deep: 70% is in `src/jsdom/living/events`. The main costs are:
   - `_dispatch` `EventTarget-impl.js:147` (25% self)
   - `invokeEventListeners` and `innerInvokeEventListeners` (25%)
   - Event construction (13%)
@@ -198,7 +198,7 @@ There is also a one-off 9.5% for the `document` named-property cache build (`Doc
 
 ### Style
 
-- computed-style: 95% is in `prepareComputedStyleDeclaration` (`lib/jsdom/living/css/helpers/computed-style.js:44`).
+- computed-style: 95% is in `prepareComputedStyleDeclaration` (`src/jsdom/living/css/helpers/computed-style.js:44`).
 - For every matching rule and declaration, the cascade calls `declaration.setProperty(property, value)` (61% incl). That re-parses the value string with css-tree:
   - `clone`
   - `TokenStream`
