@@ -6,7 +6,8 @@ name: Release
 #   - rsdom, with those packages added as optionalDependencies;
 #   - jest-environment-rsdom and vitest-environment-rsdom (packages/).
 # Running the workflow by hand builds everything and does a `npm publish --dry-run` rehearsal instead.
-# Needs the NPM_TOKEN secret (an npm automation or granular token that can publish these packages).
+# Publishing uses npm trusted publishing (OIDC): no token secret. Every package must have a trusted publisher for
+# sagiereder/rsdom + release.yml (scripts/release/bootstrap-trusted-publishing.sh sets that up once).
 
 on:
   push:
@@ -113,13 +114,15 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      id-token: write # npm provenance
+      id-token: write # npm trusted publishing (OIDC); also produces provenance
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with:
           node-version: 24
           registry-url: https://registry.npmjs.org
+      - name: Update npm (trusted publishing needs npm >= 11.5.1)
+        run: npm install -g npm@latest
       - name: Install dependencies (also generates src/generated)
         run: npm ci
       - name: Check versions
@@ -139,12 +142,10 @@ jobs:
         run: node scripts/release/platform-packages.js copy artifacts
       - name: Publish
         shell: bash
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           VERSION=$(node -p "require('./package.json').version")
           FLAGS=(--access public)
-          if [[ "$GITHUB_REF_TYPE" == tag ]]; then FLAGS+=(--provenance); else FLAGS+=(--dry-run); fi
+          if [[ "$GITHUB_REF_TYPE" != tag ]]; then FLAGS+=(--dry-run); fi
           if [[ "$VERSION" == *-* ]]; then FLAGS+=(--tag next); fi
 
           # Skip packages already at this version, so a failed run can be re-run.
