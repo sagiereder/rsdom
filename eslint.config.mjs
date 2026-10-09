@@ -24,6 +24,8 @@ export default [
   {
     ignores: [
       "benchmark/selectors/sizzle-speed/**",
+      "bench-rs/**",
+      ".devshim/**",
       "lib/jsdom/level3/xpath.js",
       "lib/generated/**",
       "test/api/fixtures/**",
