@@ -20,7 +20,7 @@ exports.implementation = class HTMLHyperlinkElementUtilsImpl {
       return this.getAttributeNS(null, "target");
     }
 
-    const baseEl = this._ownerDocument.querySelector("base[target]");
+    const baseEl = this._ownerDocument._firstBaseWithTarget();
 
     if (baseEl) {
       return baseEl.getAttributeNS(null, "target");
