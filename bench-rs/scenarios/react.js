@@ -5,12 +5,23 @@
 const { freshDom, installGlobals } = require("../lib/common.js");
 const { makeApps } = require("./react-apps.js");
 
-function loadReact({ JSDOM }, { rtl = false } = {}) {
+// `prod` loads React's production builds. They have no `act()`, so updates are flushed with `flushSync()` instead,
+// which renders synchronously; none of the benchmark apps use passive effects.
+function loadReact({ JSDOM }, { rtl = false, prod = false } = {}) {
+  if (prod) {
+    process.env.NODE_ENV = "production";
+  }
   const boot = freshDom(JSDOM, "<!DOCTYPE html><html><head></head><body></body></html>", { url: "http://localhost/" });
   installGlobals(boot.window);
   const React = require("react");
+  const ReactDOM = require("react-dom");
   const ReactDOMClient = require("react-dom/client");
-  const shared = { React, ReactDOMClient, apps: makeApps(React) };
+  const act = prod ?
+    fn => {
+      ReactDOM.flushSync(fn);
+    } :
+    fn => React.act(fn);
+  const shared = { React, ReactDOM, ReactDOMClient, act, apps: makeApps(React, ReactDOM) };
   if (rtl) {
     shared.RTL = require("@testing-library/react");
   }
@@ -23,92 +34,143 @@ function freshWindow(JSDOM) {
   return dom;
 }
 
-async function renderDashboard({ JSDOM }, shared) {
+function renderDashboard({ JSDOM }, shared) {
   const dom = freshWindow(JSDOM);
-  const { React, ReactDOMClient, apps } = shared;
+  const { React, ReactDOMClient, apps, act } = shared;
   const container = dom.window.document.createElement("div");
   dom.window.document.body.appendChild(container);
   const root = ReactDOMClient.createRoot(container);
-  return { dom, root, container, React, apps };
+  return { dom, root, container, React, apps, act };
 }
 
 async function closeDashboard(st) {
   if (st.root) {
-    await st.React.act(() => st.root.unmount());
+    await st.act(() => st.root.unmount());
   }
   st.dom.window.close();
 }
 
-module.exports = [
-  {
-    name: "react/render-dashboard",
-    group: "react",
-    desc: "createRoot + act(render) of a ~3k-element dashboard (header/nav, sidebar, stat cards, 250-row table, form, feed)",
-    prepare: ctx => loadReact(ctx),
-    setup: renderDashboard,
-    async run(st) {
-      await st.React.act(() => st.root.render(st.React.createElement(st.apps.Dashboard)));
-      st.count = st.container.getElementsByTagName("*").length;
+// Sets a form control's value the way a user edit would (through the prototype setter, bypassing React's value
+// tracker) and fires the input event React listens to.
+async function typeInto(window, el, text, act) {
+  const proto = el.localName === "textarea" ? window.HTMLTextAreaElement.prototype : window.HTMLInputElement.prototype;
+  const setValue = Object.getOwnPropertyDescriptor(proto, "value").set;
+  for (let i = 1; i <= text.length; i++) {
+    await act(() => {
+      setValue.call(el, text.slice(0, i));
+      el.dispatchEvent(new window.Event("input", { bubbles: true }));
+    });
+  }
+}
+
+function dashboardScenarios(prefix, prod) {
+  const prepare = ctx => loadReact(ctx, { prod });
+  const label = prod ? " (React production build)" : "";
+  return [
+    {
+      name: `${prefix}/render-dashboard`,
+      group: prefix,
+      desc: `createRoot + render of a ~3k-element dashboard (header/nav, sidebar, stat cards, 250-row table, form, feed)${label}`,
+      prepare,
+      setup: renderDashboard,
+      async run(st) {
+        await st.act(() => st.root.render(st.React.createElement(st.apps.Dashboard)));
+        st.count = st.container.getElementsByTagName("*").length;
+      },
+      teardown: closeDashboard
     },
-    teardown: closeDashboard
-  },
-  {
-    name: "react/updates",
-    group: "react",
-    desc: "~50 state updates on the rendered dashboard: sort, filter, theme toggle, row selection, show/hide feed",
-    prepare: ctx => loadReact(ctx),
-    async setup(ctx, shared) {
-      const st = await renderDashboard(ctx, shared);
-      await st.React.act(() => st.root.render(st.React.createElement(st.apps.Dashboard)));
-      return st;
-    },
-    async run(st) {
-      const { act } = st.React;
-      const c = () => st.apps.getController();
-      for (let i = 0; i < 4; i++) {
-        await act(() => c().setSortDir(d => -d));
-      }
-      for (const f of ["1", "12", "", "admin", "User 2", ""]) {
-        await act(() => c().setFilter(f));
-      }
-      for (let i = 0; i < 4; i++) {
-        await act(() => c().setTheme(t => (t === "dark" ? "light" : "dark")));
-      }
-      for (let i = 0; i < 30; i++) {
-        await act(() => c().onSelect(i * 7));
-      }
-      for (let i = 0; i < 4; i++) {
-        await act(() => c().setShowFeed(s => !s));
-      }
-    },
-    teardown: closeDashboard
-  },
-  {
-    name: "react/unmount",
-    group: "react",
-    desc: "act(root.unmount()) of 8 rendered dashboards (~33k elements total)",
-    prepare: ctx => loadReact(ctx),
-    async setup({ JSDOM }, { React, ReactDOMClient, apps }) {
-      const dom = freshWindow(JSDOM);
-      const roots = [];
-      for (let i = 0; i < 8; i++) {
-        const container = dom.window.document.createElement("div");
-        dom.window.document.body.appendChild(container);
-        const root = ReactDOMClient.createRoot(container);
-        await React.act(() => root.render(React.createElement(apps.Dashboard)));
-        roots.push(root);
-      }
-      return { dom, roots, React };
-    },
-    async run(st) {
-      await st.React.act(() => {
-        for (const root of st.roots) {
-          root.unmount();
+    {
+      name: `${prefix}/updates`,
+      group: prefix,
+      desc: `~50 state updates on the rendered dashboard: sort, filter, theme toggle, row selection, show/hide feed${label}`,
+      prepare,
+      async setup(ctx, shared) {
+        const st = renderDashboard(ctx, shared);
+        await st.act(() => st.root.render(st.React.createElement(st.apps.Dashboard)));
+        return st;
+      },
+      async run(st) {
+        const { act } = st;
+        const c = () => st.apps.getController();
+        for (let i = 0; i < 4; i++) {
+          await act(() => c().setSortDir(d => -d));
         }
-      });
+        for (const f of ["1", "12", "", "admin", "User 2", ""]) {
+          await act(() => c().setFilter(f));
+        }
+        for (let i = 0; i < 4; i++) {
+          await act(() => c().setTheme(t => (t === "dark" ? "light" : "dark")));
+        }
+        for (let i = 0; i < 30; i++) {
+          await act(() => c().onSelect(i * 7));
+        }
+        for (let i = 0; i < 4; i++) {
+          await act(() => c().setShowFeed(s => !s));
+        }
+      },
+      teardown: closeDashboard
     },
-    teardown: st => st.dom.window.close()
-  },
+    {
+      name: `${prefix}/unmount`,
+      group: prefix,
+      desc: `root.unmount() of 8 rendered dashboards (~33k elements total)${label}`,
+      prepare,
+      async setup({ JSDOM }, { React, ReactDOMClient, apps, act }) {
+        const dom = freshWindow(JSDOM);
+        const roots = [];
+        for (let i = 0; i < 8; i++) {
+          const container = dom.window.document.createElement("div");
+          dom.window.document.body.appendChild(container);
+          const root = ReactDOMClient.createRoot(container);
+          await act(() => root.render(React.createElement(apps.Dashboard)));
+          roots.push(root);
+        }
+        return { dom, roots, act };
+      },
+      async run(st) {
+        await st.act(() => {
+          for (const root of st.roots) {
+            root.unmount();
+          }
+        });
+      },
+      teardown: st => st.dom.window.close()
+    },
+    {
+      name: `${prefix}/complex-app`,
+      group: prefix,
+      desc: "mount a 2000x8 data grid + 40-field form page, sort 4x, filter 4x, type into 3 fields, open/close a " +
+        `20-field portal modal 5x, unmount${label}`,
+      prepare,
+      setup: renderDashboard,
+      async run(st) {
+        const { act, apps, root, dom } = st;
+        const { document } = dom.window;
+        await act(() => root.render(st.React.createElement(apps.ComplexApp)));
+        const c = () => apps.getComplexController();
+        for (const key of ["amount", "amount", "city", "name"]) {
+          await act(() => c().onSort(key));
+        }
+        for (const f of ["1", "19", "Haifa", ""]) {
+          await act(() => c().setFilter(f));
+        }
+        for (const id of ["ff-f0", "ff-f1", "ff-f4"]) {
+          await typeInto(dom.window, document.getElementById(id), "hello world", act);
+        }
+        for (let i = 0; i < 5; i++) {
+          await act(() => c().setModalOpen(true));
+          await act(() => c().setModalOpen(false));
+        }
+        await act(() => root.unmount());
+        st.root = null;
+      },
+      teardown: closeDashboard
+    }
+  ];
+}
+
+module.exports = [
+  ...dashboardScenarios("react", false),
   {
     name: "react/testing-library-form",
     group: "react",
@@ -157,5 +219,6 @@ module.exports = [
       st.RTL.cleanup();
       st.dom.window.close();
     }
-  }
+  },
+  ...dashboardScenarios("react-prod", true)
 ];

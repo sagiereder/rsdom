@@ -1,7 +1,7 @@
 "use strict";
 // React component trees used by the React scenarios. Plain React.createElement, no JSX.
 
-function makeApps(React) {
+function makeApps(React, ReactDOM) {
   const h = React.createElement;
   const { useState, useMemo, useCallback, memo } = React;
 
@@ -156,7 +156,114 @@ function makeApps(React) {
         h("p", null, `${todos.filter(t => !t.done).length} remaining`)));
   }
 
-  return { Dashboard, TodoForm, getController: () => controller };
+
+  // ---------- Complex app: 2000x8 data grid with sort/filter, a form-heavy page and a portal modal ----------
+  const CITIES = ["Berlin", "Haifa", "Lisbon", "Osaka", "Austin", "Lagos", "Quito", "Perth"];
+  const STATUSES = ["open", "pending", "closed", "blocked"];
+  const GRID_ROWS = Array.from({ length: 2000 }, (_, i) => ({
+    id: i,
+    name: `Customer ${i}`,
+    email: `c${i}@corp.example`,
+    city: CITIES[(i * 7) % CITIES.length],
+    amount: ((i * 7919) % 100000) / 100,
+    date: `2024-${String((i % 12) + 1).padStart(2, "0")}-${String((i % 28) + 1).padStart(2, "0")}`,
+    status: STATUSES[(i * 3) % STATUSES.length],
+    progress: (i * 37) % 101
+  }));
+  const GRID_COLS = ["id", "name", "email", "city", "amount", "date", "status", "progress"];
+  const FORM_FIELDS = Array.from({ length: 40 }, (_, i) => ({
+    key: `f${i}`,
+    label: `Field ${i}`,
+    kind: ["text", "email", "number", "select", "textarea"][i % 5],
+    required: i % 3 === 0
+  }));
+
+  const GridRow = memo(({ row }) => h("tr", { className: `grid-row status-${row.status}`, "data-id": row.id },
+    h("td", { className: "c-id" }, row.id),
+    h("td", { className: "c-name" }, h("a", { href: `#/c/${row.id}` }, row.name)),
+    h("td", { className: "c-email" }, row.email),
+    h("td", { className: "c-city" }, row.city),
+    h("td", { className: "c-amount", style: { textAlign: "right" } }, row.amount.toFixed(2)),
+    h("td", { className: "c-date" }, h("time", { dateTime: row.date }, row.date)),
+    h("td", { className: "c-status" }, h("span", { className: `pill pill-${row.status}` }, row.status)),
+    h("td", { className: "c-progress" }, h("div", { className: "bar", style: { width: `${row.progress}%` } }))));
+
+  const Grid = ({ rows, sortKey, sortDir, onSort }) => h("table", { className: "grid", role: "grid" },
+    h("thead", null, h("tr", null, GRID_COLS.map(c => h("th", { key: c, scope: "col", "aria-sort": c === sortKey ? (sortDir > 0 ? "ascending" : "descending") : "none" },
+      h("button", { type: "button", className: "sort", onClick: () => onSort(c) }, c))))),
+    h("tbody", null, rows.map(r => h(GridRow, { key: r.id, row: r }))));
+
+  const FormField = memo(({ field, value, error, onChange }) => {
+    const id = `ff-${field.key}`;
+    const common = { id, name: field.key, value, onChange: e => onChange(field.key, e.target.value), "aria-invalid": error ? "true" : "false", required: field.required };
+    let control;
+    if (field.kind === "select") {
+      control = h("select", common, ["", "a", "b", "c", "d"].map(o => h("option", { key: o, value: o }, o || "Choose...")));
+    } else if (field.kind === "textarea") {
+      control = h("textarea", { ...common, rows: 3 });
+    } else {
+      control = h("input", { ...common, type: field.kind });
+    }
+    return h("div", { className: error ? "form-field has-error" : "form-field" },
+      h("label", { htmlFor: id }, field.label, field.required ? h("span", { className: "req", "aria-hidden": true }, "*") : null),
+      control,
+      error ? h("p", { className: "error", role: "alert" }, error) : null);
+  });
+
+  const Modal = ({ onClose, values, onChange }) => ReactDOM.createPortal(
+    h("div", { className: "modal-backdrop", style: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)" } },
+      h("div", { className: "modal", role: "dialog", "aria-modal": "true", "aria-labelledby": "modal-title", style: { margin: "10% auto", width: 480, background: "#fff", padding: 24 } },
+        h("h2", { id: "modal-title" }, "Edit details"),
+        h("form", { onSubmit: e => e.preventDefault() },
+          FORM_FIELDS.slice(0, 20).map(f => h(FormField, { key: f.key, field: f, value: values[f.key], error: null, onChange }))),
+        h("div", { className: "modal-actions" },
+          h("button", { type: "button", onClick: onClose }, "Cancel"),
+          h("button", { type: "button", className: "primary", onClick: onClose }, "Save")))),
+    document.body);
+
+  let complexController = null;
+  function ComplexApp() {
+    const [sortKey, setSortKey] = useState("id");
+    const [sortDir, setSortDir] = useState(1);
+    const [filter, setFilter] = useState("");
+    const [modalOpen, setModalOpen] = useState(false);
+    const [values, setValues] = useState(() => Object.fromEntries(FORM_FIELDS.map(f => [f.key, ""])));
+    const onSort = useCallback(key => {
+      setSortKey(prev => {
+        if (prev === key) {
+          setSortDir(d => -d);
+        } else {
+          setSortDir(1);
+        }
+        return key;
+      });
+    }, []);
+    const onChange = useCallback((key, v) => setValues(prev => ({ ...prev, [key]: v })), []);
+    complexController = { onSort, setFilter, setModalOpen };
+    const rows = useMemo(() => {
+      const f = filter ? GRID_ROWS.filter(r => r.name.includes(filter) || r.city.includes(filter)) : GRID_ROWS;
+      return [...f].sort((a, b) => {
+        const x = a[sortKey];
+        const y = b[sortKey];
+        return sortDir * (x < y ? -1 : x > y ? 1 : a.id - b.id);
+      });
+    }, [filter, sortKey, sortDir]);
+    const errors = FORM_FIELDS.filter(f => f.required && !values[f.key]).length;
+    return h("div", { className: "complex-app" },
+      h("header", { className: "toolbar", style: { display: "flex", gap: 8 } },
+        h("input", { type: "search", "aria-label": "Filter rows", value: filter, onChange: e => setFilter(e.target.value) }),
+        h("span", { className: "row-count" }, `${rows.length} rows`),
+        h("button", { type: "button", onClick: () => setModalOpen(true) }, "Open editor")),
+      h(Grid, { rows, sortKey, sortDir, onSort }),
+      h("section", { className: "form-page", "aria-label": "Details" },
+        h("h2", null, "Details"),
+        h("p", { className: "summary" }, `${errors} required fields missing`),
+        h("form", { onSubmit: e => e.preventDefault() },
+          FORM_FIELDS.map(f => h(FormField, { key: f.key, field: f, value: values[f.key], error: f.required && !values[f.key] ? `${f.label} is required` : null, onChange })))),
+      modalOpen ? h(Modal, { onClose: () => setModalOpen(false), values, onChange }) : null);
+  }
+
+  return { Dashboard, TodoForm, ComplexApp, getController: () => controller, getComplexController: () => complexController };
 }
 
 module.exports = { makeApps };
