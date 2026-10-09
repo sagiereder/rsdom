@@ -152,6 +152,7 @@ const eventInterfaceTable = {
 class DocumentImpl extends NodeImpl {
   #domSelector = null;
   #styleCache = null;
+  #displayCache = null;
   #lastFocusedElement = null;
   #namedPropertyCollections;
   #namedPropertyElementsCache = null;
@@ -250,6 +251,7 @@ class DocumentImpl extends NodeImpl {
     // Cache of document base URL
     this._baseURLCache = null;
     this._baseURLSerializedCache = null;
+    this._baseTargetElementCache = undefined;
   }
 
   // Cache of computed element styles. Created lazily: every DOM mutation in a connected tree clears it.
@@ -263,6 +265,14 @@ class DocumentImpl extends NodeImpl {
 
   _clearStyleCache() {
     this.#styleCache = null;
+    this.#displayCache = null;
+  }
+
+  // Cache of whether elements have `display: none`, used by focusability checks (see computed-style.js's
+  // isDisplayNone()). Cleared along with the style cache, except on focus changes that can't affect it.
+  get _displayCache() {
+    this.#displayCache ??= new WeakMap();
+    return this.#displayCache;
   }
 
   get _lastFocusedElement() {
@@ -272,7 +282,13 @@ class DocumentImpl extends NodeImpl {
   set _lastFocusedElement(element) {
     if (this.#lastFocusedElement !== element) {
       this.#lastFocusedElement = element;
+      const displayCache = this.#displayCache;
       this._invalidateSelectorState();
+      // The display cache only holds results computed with the current style index (any style sheet change clears
+      // it), so it survives when no rule that sets `display` depends on focus.
+      if (displayCache !== null && this._styleIndex && !this._styleIndex.displayDependsOnFocus) {
+        this.#displayCache = displayCache;
+      }
     }
   }
 
@@ -293,6 +309,16 @@ class DocumentImpl extends NodeImpl {
   _clearBaseURLCache() {
     this._baseURLCache = null;
     this._baseURLSerializedCache = null;
+    this._baseTargetElementCache = undefined;
+  }
+
+  // The first base element with a target attribute, used by https://html.spec.whatwg.org/#get-an-element's-target.
+  // Cached like the base URL: HTMLBaseElement-impl.js clears it when a base element is inserted, removed or changes.
+  _firstBaseWithTarget() {
+    if (this._baseTargetElementCache === undefined) {
+      this._baseTargetElementCache = this.querySelector("base[target]");
+    }
+    return this._baseTargetElementCache;
   }
 
   // https://html.spec.whatwg.org/multipage/infrastructure.html#document-base-url

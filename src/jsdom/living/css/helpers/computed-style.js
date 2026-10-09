@@ -77,20 +77,14 @@ function applyStyleSheetRules(elementImpl, declaration) {
     parsedDefaultStyleSheet = parseStyleSheet(defaultStyleSheet, elementImpl._globalObject);
   }
 
-  const document = elementImpl._ownerDocument;
-  if (
-    useStyleIndex &&
-    document.contentType === "text/html" &&
-    styleIndex.isFastPathElement(elementImpl) &&
-    styleIndex.isDocumentRooted(elementImpl, document)
-  ) {
+  if (canUseStyleIndex(elementImpl)) {
     applyIndexedStyleSheetRules(elementImpl, declaration);
     return true;
   }
 
   const specificities = new Map();
   handleSheet(parsedDefaultStyleSheet, elementImpl, declaration, specificities);
-  for (const sheetImpl of document.styleSheets._list) {
+  for (const sheetImpl of elementImpl._ownerDocument.styleSheets._list) {
     handleSheet(sheetImpl, elementImpl, declaration, specificities);
   }
   return false;
@@ -114,36 +108,7 @@ function applyIndexedStyleSheetRules(elementImpl, declaration) {
   let key = "";
 
   for (const entry of index.candidates(elementImpl, ctx)) {
-    let mediaMatches = true;
-    for (const mediaList of entry.media) {
-      let result = mediaResults.get(mediaList);
-      if (result === undefined) {
-        result = evaluateMediaList(mediaList);
-        mediaResults.set(mediaList, result);
-      }
-      if (!result) {
-        mediaMatches = false;
-        break;
-      }
-    }
-    if (!mediaMatches) {
-      continue;
-    }
-    let specificity = null;
-    if (index.quirks && entry.usesIdOrClass) {
-      // Quirks mode id/class matching isn't modeled by the compiled matchers.
-      specificity = matchRuleSpecificity(entry.rule, elementImpl);
-    } else if (entry.kind === styleIndex.FAST) {
-      if (styleIndex.matchAnyComplex(entry.complexes, elementImpl, ctx)) {
-        specificity = styleIndex.getSpecificity(entry);
-      }
-    } else if (entry.kind === styleIndex.PREFILTER) {
-      if (styleIndex.matchAnyComplex(entry.complexes, elementImpl, ctx)) {
-        specificity = matchRuleSpecificity(entry.rule, elementImpl);
-      }
-    } else {
-      specificity = matchRuleSpecificity(entry.rule, elementImpl);
-    }
+    const specificity = matchIndexEntry(index, entry, elementImpl, ctx, mediaResults);
     if (specificity !== null) {
       matched.push([entry.rule, specificity]);
       key += `${entry.order},`;
@@ -184,6 +149,114 @@ function applyIndexedStyleSheetRules(elementImpl, declaration) {
     index.cascadeCache.clear();
   }
   index.cascadeCache.set(key, declaration._snapshotDeclarations());
+}
+
+function canUseStyleIndex(elementImpl) {
+  const document = elementImpl._ownerDocument;
+  return useStyleIndex &&
+    document.contentType === "text/html" &&
+    styleIndex.isFastPathElement(elementImpl) &&
+    styleIndex.isDocumentRooted(elementImpl, document);
+}
+
+// Returns the specificity with which a style index entry matches the element, or null if it doesn't match.
+function matchIndexEntry(index, entry, elementImpl, ctx, mediaResults) {
+  for (const mediaList of entry.media) {
+    let result = mediaResults.get(mediaList);
+    if (result === undefined) {
+      result = evaluateMediaList(mediaList);
+      mediaResults.set(mediaList, result);
+    }
+    if (!result) {
+      return null;
+    }
+  }
+  if (index.quirks && entry.usesIdOrClass) {
+    // Quirks mode id/class matching isn't modeled by the compiled matchers.
+    return matchRuleSpecificity(entry.rule, elementImpl);
+  }
+  if (entry.kind === styleIndex.FAST) {
+    return styleIndex.matchAnyComplex(entry.complexes, elementImpl, ctx) ? styleIndex.getSpecificity(entry) : null;
+  }
+  if (entry.kind === styleIndex.PREFILTER) {
+    return styleIndex.matchAnyComplex(entry.complexes, elementImpl, ctx) ?
+      matchRuleSpecificity(entry.rule, elementImpl) :
+      null;
+  }
+  return matchRuleSpecificity(entry.rule, elementImpl);
+}
+
+// Whether the computed value of `display` is `none`. Equivalent to
+// `getComputedStyleDeclaration(elementImpl).getPropertyValue("display") === "none"`, but when the style index applies,
+// only the rules that set `display` are matched, and the cascade is run for that one property. The results are cached
+// per document until the next style invalidation (see Document-impl.js's _displayCache).
+function isDisplayNone(elementImpl) {
+  const document = elementImpl._ownerDocument;
+  const displayCache = document._displayCache;
+  // Only document-rooted elements are cached, and any change that could make them unsuitable for the style index
+  // (attribute changes, moves) clears the cache, so a hit doesn't need the canUseStyleIndex() check.
+  const cached = displayCache.get(elementImpl);
+  if (cached !== undefined) {
+    return cached;
+  }
+  if (canUseStyleIndex(elementImpl)) {
+    const result = indexedDisplayIsNone(elementImpl, document);
+    if (result !== undefined) {
+      displayCache.set(elementImpl, result);
+      return result;
+    }
+  }
+  return getComputedStyleDeclaration(elementImpl).getPropertyValue("display") === "none";
+}
+
+// Returns undefined when the cascaded value needs the full computation (CSS-wide keywords, var(), ...).
+function indexedDisplayIsNone(elementImpl, document) {
+  if (!parsedDefaultStyleSheet) {
+    parsedDefaultStyleSheet = parseStyleSheet(defaultStyleSheet, elementImpl._globalObject);
+  }
+  const index = styleIndex.getStyleIndex(document, [parsedDefaultStyleSheet, ...document.styleSheets._list]);
+  if (index.displayUnsupported) {
+    return undefined;
+  }
+
+  // Mirrors handleProperty() and handlePropertyForInlineStyle() for the one property.
+  let value = "";
+  let important = false;
+  let bestSpecificity = null;
+  const ctx = { classSets: new Map() };
+  const mediaResults = new Map();
+  for (const entry of index.candidates(elementImpl, ctx, index.display)) {
+    const specificity = matchIndexEntry(index, entry, elementImpl, ctx, mediaResults);
+    if (specificity === null) {
+      continue;
+    }
+    const { style } = entry.rule;
+    if (style.getPropertyPriority("display")) {
+      value = style.getPropertyValue("display");
+      important = true;
+    } else if (!important && (bestSpecificity === null || Specificity.compare(specificity, bestSpecificity) >= 0)) {
+      bestSpecificity = specificity;
+      value = style.getPropertyValue("display");
+    }
+  }
+  const { style } = elementImpl;
+  if (style) {
+    const inlineValue = style.getPropertyValue("display");
+    if (inlineValue !== "") {
+      const inlinePriority = style.getPropertyPriority("display");
+      if (!important || inlinePriority) {
+        value = inlineValue;
+      }
+    }
+  }
+
+  if (value === "" || value === "none") {
+    return value === "none";
+  }
+  if (isGlobalKeyword(value) || !/^[a-z-]+(?: [a-z-]+)*$/.test(value)) {
+    return undefined;
+  }
+  return false;
 }
 
 function matchRuleSpecificity(ruleImpl, elementImpl) {
@@ -495,6 +568,7 @@ function getParentFontSizeInPixels(elementImpl) {
 
 exports.SHADOW_DOM_PSEUDO_REGEXP = /^::(?:part|slotted)\(/i;
 exports.getComputedStyleDeclaration = getComputedStyleDeclaration;
+exports.isDisplayNone = isDisplayNone;
 exports.getInheritedPropertyValue = getInheritedPropertyValue;
 exports.getParentFontSizeInPixels = getParentFontSizeInPixels;
 exports.replaceEmptyValueAndKeywords = replaceEmptyValueAndKeywords;

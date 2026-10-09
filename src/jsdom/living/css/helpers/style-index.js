@@ -530,6 +530,10 @@ function compileCached(selectorText) {
   return compiled;
 }
 
+function newBuckets() {
+  return { byId: new Map(), byClass: new Map(), byAttr: new Map(), byTag: new Map(), universal: [], fallback: [] };
+}
+
 function pushBucket(map, key, entry) {
   let list = map.get(key);
   if (list === undefined) {
@@ -548,16 +552,17 @@ class StyleIndex {
     // it is dropped whenever the rules change.
     this.cascadeCache = new Map();
     this.entries = [];
-    this.byId = new Map();
-    this.byClass = new Map();
-    this.byAttr = new Map();
-    this.byTag = new Map();
-    this.universal = [];
-    this.fallback = [];
+    // Buckets of all entries, and of the entries that can set `display` (see computed-style.js's isDisplayNone()).
+    this.all = newBuckets();
+    this.display = newBuckets();
+    // Set when an entry that can set `display` might match differently depending on focus, so focus changes must
+    // invalidate cached `display` values.
+    this.displayDependsOnFocus = false;
+    // Set when the `display` buckets can't be used (a matched non-style rule would need the full cascade).
+    this.displayUnsupported = false;
     // [sheet, version] pairs used to validate the index.
     this.sheetVersions = [];
     this.topSheets = sheets.slice();
-    this.anyIdOrClass = false;
     for (const sheet of sheets) {
       this.#addSheet(sheet, []);
     }
@@ -624,34 +629,46 @@ class StyleIndex {
       usesIdOrClass: compiled ? usesIdOrClass(complexes) : false
     };
     this.entries.push(entry);
-    if (!compiled) {
-      this.fallback.push(entry);
-      return;
-    }
-    if (entry.usesIdOrClass) {
-      this.anyIdOrClass = true;
-    }
-    for (const complex of complexes) {
-      const key = subjectKey(complex);
-      if (key === null) {
-        this.universal.push(entry);
-        continue;
-      }
-      const [type, name] = key;
-      if (type === "id") {
-        pushBucket(this.byId, this.quirks ? name.toLowerCase() : name, entry);
-      } else if (type === "class") {
-        pushBucket(this.byClass, this.quirks ? name.toLowerCase() : name, entry);
-      } else if (type === "attr") {
-        pushBucket(this.byAttr, name, entry);
-      } else {
-        pushBucket(this.byTag, name, entry);
+    this.#addToBuckets(this.all, entry, complexes);
+    if (!isStyleRule) {
+      this.displayUnsupported = true;
+    } else if (rule.style.getPropertyValue("display") !== "") {
+      this.#addToBuckets(this.display, entry, complexes);
+      // Selectors that can't be compiled are matched by dom-selector and can depend on anything, while compiled ones
+      // spell every pseudo-class out (an escaped name would contain a backslash, which compileSelectorList rejects).
+      if (!compiled || /focus/i.test(rule.selectorText)) {
+        this.displayDependsOnFocus = true;
       }
     }
   }
 
-  // Returns the candidate entries for an element, in cascade order, deduplicated.
-  candidates(element, ctx) {
+  #addToBuckets(buckets, entry, complexes) {
+    if (complexes === null) {
+      buckets.fallback.push(entry);
+      return;
+    }
+    for (const complex of complexes) {
+      const key = subjectKey(complex);
+      if (key === null) {
+        buckets.universal.push(entry);
+        continue;
+      }
+      const [type, name] = key;
+      if (type === "id") {
+        pushBucket(buckets.byId, this.quirks ? name.toLowerCase() : name, entry);
+      } else if (type === "class") {
+        pushBucket(buckets.byClass, this.quirks ? name.toLowerCase() : name, entry);
+      } else if (type === "attr") {
+        pushBucket(buckets.byAttr, name, entry);
+      } else {
+        pushBucket(buckets.byTag, name, entry);
+      }
+    }
+  }
+
+  // Returns the candidate entries for an element, in cascade order, deduplicated. `buckets` is `this.all` (the
+  // default) or `this.display`.
+  candidates(element, ctx, buckets = this.all) {
     const result = [];
     function add(list) {
       if (list !== undefined) {
@@ -660,26 +677,26 @@ class StyleIndex {
         }
       }
     }
-    add(this.universal);
-    add(this.fallback);
-    add(this.byTag.get(element._localName));
-    if (this.byId.size) {
+    add(buckets.universal);
+    add(buckets.fallback);
+    add(buckets.byTag.get(element._localName));
+    if (buckets.byId.size) {
       const id = element.getAttributeNS(null, "id");
       if (id !== null) {
-        add(this.byId.get(this.quirks ? id.toLowerCase() : id));
+        add(buckets.byId.get(this.quirks ? id.toLowerCase() : id));
       }
     }
-    if (this.byClass.size) {
+    if (buckets.byClass.size) {
       const set = getClassSet(element, ctx);
       if (set !== null) {
         for (const cls of set) {
-          add(this.byClass.get(this.quirks ? cls.toLowerCase() : cls));
+          add(buckets.byClass.get(this.quirks ? cls.toLowerCase() : cls));
         }
       }
     }
-    if (this.byAttr.size) {
+    if (buckets.byAttr.size) {
       for (const attr of element._attributeList) {
-        add(this.byAttr.get(attr._localName));
+        add(buckets.byAttr.get(attr._localName));
       }
     }
     result.sort((a, b) => a.order - b.order);

@@ -23,7 +23,7 @@ class HTMLBaseElementImpl extends HTMLElementImpl {
   _attributeChangeSteps(localName, oldValue, value, namespace) {
     super._attributeChangeSteps(localName, oldValue, value, namespace);
 
-    if (namespace === null && localName === "href") {
+    if (namespace === null && (localName === "href" || localName === "target")) {
       this._ownerDocument._clearBaseURLCache();
     }
   }
