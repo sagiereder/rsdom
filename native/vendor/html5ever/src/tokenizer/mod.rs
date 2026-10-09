@@ -759,6 +759,11 @@ impl<Sink: TokenSink> Tokenizer<Sink> {
                 match set_result {
                     FromSet('\0') => {
                         self.bad_char_error();
+                        // jsdom patch: parse5 merges a run of NULLs into a single null-character token.
+                        while input.peek() == Some('\0') {
+                            input.next();
+                            self.bad_char_error();
+                        }
                         self.emit_char('\0');
                     },
                     FromSet('&') => go!(self: consume_char_ref),

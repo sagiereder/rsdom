@@ -16,6 +16,7 @@ use std::collections::HashMap;
 
 use html5ever::interface::{ElemName, ElementFlags, NodeOrText, QuirksMode, TreeSink};
 use html5ever::tendril::{StrTendril, TendrilSink};
+use html5ever::tokenizer::TokenizerOpts;
 use html5ever::tree_builder::TreeBuilderOpts;
 use html5ever::{local_name, ns, Attribute, LocalName, Namespace, ParseOpts, QualName};
 use napi::bindgen_prelude::*;
@@ -633,7 +634,11 @@ fn tree_builder_opts(scripting_enabled: bool) -> ParseOpts {
       scripting_enabled,
       ..Default::default()
     },
-    ..Default::default()
+    // jsdom strips any BOM while decoding bytes; a U+FEFF that reaches the parser is content, as in parse5.
+    tokenizer: TokenizerOpts {
+      discard_bom: false,
+      ..Default::default()
+    },
   }
 }
 

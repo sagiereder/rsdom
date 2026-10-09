@@ -58,7 +58,9 @@ declare_tag_set!(pub html_default_scope =
 
 #[inline(always)]
 pub(crate) fn default_scope(name: ExpandedName) -> bool {
+    // jsdom patch: like parse5 (and the spec), MathML annotation-xml is a scope boundary.
     html_default_scope(name)
+        || name == expanded_name!(mathml "annotation-xml")
         || mathml_text_integration_point(name)
         || svg_html_integration_point(name)
 }
@@ -66,7 +68,13 @@ pub(crate) fn default_scope(name: ExpandedName) -> bool {
 declare_tag_set!(pub list_item_scope = [default_scope] + "ol" "ul");
 declare_tag_set!(pub button_scope = [default_scope] + "button");
 declare_tag_set!(pub table_scope = "html" "table" "template");
-declare_tag_set!(pub select_scope = [full_set] - "optgroup" "option");
+// jsdom patch: parse5 8's hasInTableScope does not stop at <template>.
+declare_tag_set!(pub p5_table_scope = "html" "table");
+// jsdom patch: parse5's hasInSelectScope skips non-HTML elements.
+declare_tag_set!(html_select_scope = [full_set] - "optgroup" "option");
+pub(crate) fn select_scope(p: ExpandedName) -> bool {
+    *p.ns == ns!(html) && html_select_scope(p)
+}
 
 declare_tag_set!(pub table_body_context = "tbody" "tfoot" "thead" "template" "html");
 declare_tag_set!(pub table_row_context = "tr" "template" "html");
@@ -80,11 +88,20 @@ declare_tag_set!(pub thorough_implied_end = [cursory_implied_end]
 
 declare_tag_set!(pub heading_tag = "h1" "h2" "h3" "h4" "h5" "h6");
 
-declare_tag_set!(pub special_tag =
+// jsdom patch: parse5's special set is namespace-aware (MathML text integration points and annotation-xml, SVG
+// HTML integration points) and has no isindex.
+pub(crate) fn special_tag(p: ExpandedName) -> bool {
+    html_special_tag(p)
+        || mathml_text_integration_point(p)
+        || svg_html_integration_point(p)
+        || p == expanded_name!(mathml "annotation-xml")
+}
+
+declare_tag_set!(html_special_tag =
     "address" "applet" "area" "article" "aside" "base" "basefont" "bgsound" "blockquote" "body"
     "br" "button" "caption" "center" "col" "colgroup" "dd" "details" "dir" "div" "dl" "dt" "embed"
     "fieldset" "figcaption" "figure" "footer" "form" "frame" "frameset" "h1" "h2" "h3" "h4" "h5"
-    "h6" "head" "header" "hgroup" "hr" "html" "iframe" "img" "input" "isindex" "li" "link"
+    "h6" "head" "header" "hgroup" "hr" "html" "iframe" "img" "input" "li" "link"
     "listing" "main" "marquee" "menu" "meta" "nav" "noembed" "noframes" "noscript"
     "object" "ol" "p" "param" "plaintext" "pre" "script" "section" "select" "source" "style"
     "summary" "table" "tbody" "td" "template" "textarea" "tfoot" "th" "thead" "title" "tr" "track"

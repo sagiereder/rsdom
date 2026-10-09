@@ -1171,7 +1171,13 @@ where
                     return;
                 };
                 let elem_name = self.sink.elem_name(elem);
-                if !set(elem_name.expanded()) {
+                // jsdom patch: parse5 compares tag IDs only, ignoring the namespace.
+                let html = ns!(html);
+                let expanded = ExpandedName {
+                    ns: &html,
+                    local: elem_name.expanded().local,
+                };
+                if !set(expanded) {
                     return;
                 }
             }
@@ -1181,10 +1187,11 @@ where
 
     fn generate_implied_end_except(&self, except: LocalName) {
         self.generate_implied_end_tags(|p| {
-            if *p.ns == ns!(html) && *p.local == except {
+            // jsdom patch: parse5's generateImpliedEndTagsWithExclusion uses the "thorough" set.
+            if *p.local == except {
                 false
             } else {
-                cursory_implied_end(p)
+                thorough_implied_end(p)
             }
         });
     }
@@ -1580,7 +1587,8 @@ where
         // Look back for a matching open element.
         let mut match_idx = None;
         for (i, elem) in self.open_elems.borrow().iter().enumerate().rev() {
-            if self.html_elem_named(elem, tag.name.clone()) {
+            // jsdom patch: parse5 matches by tag name regardless of namespace (genericEndTagInBody).
+            if i > 0 && *self.sink.elem_name(elem).local_name() == tag.name {
                 match_idx = Some(i);
                 break;
             }
@@ -1721,7 +1729,7 @@ where
             local_name!("fediffuselighting") => *name = local_name!("feDiffuseLighting"),
             local_name!("fedisplacementmap") => *name = local_name!("feDisplacementMap"),
             local_name!("fedistantlight") => *name = local_name!("feDistantLight"),
-            local_name!("fedropshadow") => *name = local_name!("feDropShadow"),
+            // jsdom patch: parse5 8 does not adjust feDropShadow.
             local_name!("feflood") => *name = local_name!("feFlood"),
             local_name!("fefunca") => *name = local_name!("feFuncA"),
             local_name!("fefuncb") => *name = local_name!("feFuncB"),

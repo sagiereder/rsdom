@@ -965,7 +965,7 @@ where
 
                 Token::Tag(tag!(<table>)) => {
                     self.unexpected(&token);
-                    if self.in_scope_named(table_scope, local_name!("table")) {
+                    if self.in_scope_named(p5_table_scope, local_name!("table")) {
                         self.pop_until_named(local_name!("table"));
                         ProcessResult::Reprocess(self.reset_insertion_mode(), token)
                     } else {
@@ -974,7 +974,7 @@ where
                 },
 
                 Token::Tag(tag!(</table>)) => {
-                    if self.in_scope_named(table_scope, local_name!("table")) {
+                    if self.in_scope_named(p5_table_scope, local_name!("table")) {
                         self.pop_until_named(local_name!("table"));
                         self.mode.set(self.reset_insertion_mode());
                     } else {
@@ -1063,7 +1063,7 @@ where
                     tag @ tag!(<caption> | <col> | <colgroup> | <tbody> | <td> | <tfoot> |
                                 <th> | <thead> | <tr> | </table> | </caption>),
                 ) => {
-                    if self.in_scope_named(table_scope, local_name!("caption")) {
+                    if self.in_scope_named(p5_table_scope, local_name!("caption")) {
                         self.generate_implied_end_tags(cursory_implied_end);
                         self.expect_to_close(local_name!("caption"));
                         self.clear_active_formatting_to_marker();
@@ -1154,7 +1154,7 @@ where
                 },
 
                 Token::Tag(tag @ tag!(</tbody> | </tfoot> | </thead>)) => {
-                    if self.in_scope_named(table_scope, tag.name.clone()) {
+                    if self.in_scope_named(p5_table_scope, tag.name.clone()) {
                         self.pop_until_current(table_body_context);
                         self.pop();
                         self.mode.set(InsertionMode::InTable);
@@ -1168,7 +1168,7 @@ where
                     tag!(<caption> | <col> | <colgroup> | <tbody> | <tfoot> | <thead> | </table>),
                 ) => {
                     declare_tag_set!(table_outer = "table" "tbody" "tfoot");
-                    if self.in_scope(table_scope, |e| self.elem_in(&e, table_outer)) {
+                    if self.in_scope(p5_table_scope, |e| self.elem_in(&e, table_outer)) {
                         self.pop_until_current(table_body_context);
                         self.pop();
                         ProcessResult::Reprocess(InsertionMode::InTable, token)
@@ -1198,7 +1198,7 @@ where
                 },
 
                 Token::Tag(tag!(</tr>)) => {
-                    if self.in_scope_named(table_scope, local_name!("tr")) {
+                    if self.in_scope_named(p5_table_scope, local_name!("tr")) {
                         self.pop_until_current(table_row_context);
                         let node = self.pop();
                         self.assert_named(&node, local_name!("tr"));
@@ -1212,7 +1212,7 @@ where
                 Token::Tag(
                     tag!(<caption> | <col> | <colgroup> | <tbody> | <tfoot> | <thead> | <tr> | </table>),
                 ) => {
-                    if self.in_scope_named(table_scope, local_name!("tr")) {
+                    if self.in_scope_named(p5_table_scope, local_name!("tr")) {
                         self.pop_until_current(table_row_context);
                         let node = self.pop();
                         self.assert_named(&node, local_name!("tr"));
@@ -1223,8 +1223,8 @@ where
                 },
 
                 Token::Tag(tag @ tag!(</tbody> | </tfoot> | </thead>)) => {
-                    if self.in_scope_named(table_scope, tag.name.clone()) {
-                        if self.in_scope_named(table_scope, local_name!("tr")) {
+                    if self.in_scope_named(p5_table_scope, tag.name.clone()) {
+                        if self.in_scope_named(p5_table_scope, local_name!("tr")) {
                             self.pop_until_current(table_row_context);
                             let node = self.pop();
                             self.assert_named(&node, local_name!("tr"));
@@ -1248,7 +1248,7 @@ where
             // https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-intd
             InsertionMode::InCell => match token {
                 Token::Tag(tag @ tag!(</td> | </th>)) => {
-                    if self.in_scope_named(table_scope, tag.name.clone()) {
+                    if self.in_scope_named(p5_table_scope, tag.name.clone()) {
                         self.generate_implied_end_tags(cursory_implied_end);
                         self.expect_to_close(tag.name);
                         self.clear_active_formatting_to_marker();
@@ -1262,7 +1262,7 @@ where
                 Token::Tag(
                     tag!(<caption> | <col> | <colgroup> | <tbody> | <td> | <tfoot> | <th> | <thead> | <tr>),
                 ) => {
-                    if self.in_scope(table_scope, |n| self.elem_in(&n, td_th)) {
+                    if self.in_scope(p5_table_scope, |n| self.elem_in(&n, td_th)) {
                         self.close_the_cell();
                         ProcessResult::Reprocess(InsertionMode::InRow, token)
                     } else {
@@ -1275,7 +1275,7 @@ where
                 },
 
                 Token::Tag(tag @ tag!(</table> | </tbody> | </tfoot> | </thead> | </tr>)) => {
-                    if self.in_scope_named(table_scope, tag.name.clone()) {
+                    if self.in_scope_named(p5_table_scope, tag.name.clone()) {
                         self.close_the_cell();
                         ProcessResult::Reprocess(InsertionMode::InRow, Token::Tag(tag))
                     } else {
@@ -1402,7 +1402,7 @@ where
                     tag!(</caption> | </table> | </tbody> | </tfoot> | </thead> | </tr> | </td> | </th>),
                 ) => {
                     self.unexpected(&tag);
-                    if self.in_scope_named(table_scope, tag.name.clone()) {
+                    if self.in_scope_named(p5_table_scope, tag.name.clone()) {
                         self.pop_until_named(local_name!("select"));
                         ProcessResult::Reprocess(self.reset_insertion_mode(), Token::Tag(tag))
                     } else {
