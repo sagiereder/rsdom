@@ -39,35 +39,35 @@ function addDir(dir) {
   transformer.addSource(resolved, resolved);
 }
 
-addDir("../../lib/jsdom/living/aborting");
-addDir("../../lib/jsdom/living/aria");
-addDir("../../lib/jsdom/living/attributes");
-addDir("../../lib/jsdom/living/constraint-validation");
-addDir("../../lib/jsdom/living/crypto");
-addDir("../../lib/jsdom/living/css");
-addDir("../../lib/jsdom/living/custom-elements");
-addDir("../../lib/jsdom/living/deviceorientation");
-addDir("../../lib/jsdom/living/domparsing");
-addDir("../../lib/jsdom/living/encoding");
-addDir("../../lib/jsdom/living/events");
-addDir("../../lib/jsdom/living/fetch");
-addDir("../../lib/jsdom/living/file-api");
-addDir("../../lib/jsdom/living/geometry");
-addDir("../../lib/jsdom/living/hr-time");
-addDir("../../lib/jsdom/living/mutation-observer");
-addDir("../../lib/jsdom/living/navigator");
-addDir("../../lib/jsdom/living/nodes");
-addDir("../../lib/jsdom/living/range");
-addDir("../../lib/jsdom/living/selection");
-addDir("../../lib/jsdom/living/svg");
-addDir("../../lib/jsdom/living/traversal");
-addDir("../../lib/jsdom/living/websockets");
-addDir("../../lib/jsdom/living/webstorage");
-addDir("../../lib/jsdom/living/window");
-addDir("../../lib/jsdom/living/xhr");
-addDir("../../lib/jsdom/living/webidl");
+addDir("../../src/jsdom/living/aborting");
+addDir("../../src/jsdom/living/aria");
+addDir("../../src/jsdom/living/attributes");
+addDir("../../src/jsdom/living/constraint-validation");
+addDir("../../src/jsdom/living/crypto");
+addDir("../../src/jsdom/living/css");
+addDir("../../src/jsdom/living/custom-elements");
+addDir("../../src/jsdom/living/deviceorientation");
+addDir("../../src/jsdom/living/domparsing");
+addDir("../../src/jsdom/living/encoding");
+addDir("../../src/jsdom/living/events");
+addDir("../../src/jsdom/living/fetch");
+addDir("../../src/jsdom/living/file-api");
+addDir("../../src/jsdom/living/geometry");
+addDir("../../src/jsdom/living/hr-time");
+addDir("../../src/jsdom/living/mutation-observer");
+addDir("../../src/jsdom/living/navigator");
+addDir("../../src/jsdom/living/nodes");
+addDir("../../src/jsdom/living/range");
+addDir("../../src/jsdom/living/selection");
+addDir("../../src/jsdom/living/svg");
+addDir("../../src/jsdom/living/traversal");
+addDir("../../src/jsdom/living/websockets");
+addDir("../../src/jsdom/living/webstorage");
+addDir("../../src/jsdom/living/window");
+addDir("../../src/jsdom/living/xhr");
+addDir("../../src/jsdom/living/webidl");
 
-const outputDir = path.resolve(__dirname, "../../lib/generated/idl/");
+const outputDir = path.resolve(__dirname, "../../src/generated/idl/");
 
 // Clean up any old stuff lying around.
 fs.rmSync(outputDir, { force: true, recursive: true, maxRetries: 2 });

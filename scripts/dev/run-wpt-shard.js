@@ -1,10 +1,10 @@
 "use strict";
 /* eslint-disable func-style, @stylistic/max-len */
-// Mocha entry point like test/web-platform-tests/run-wpts.js, but restricted to the WPT directories
+// Mocha entry point like tests/web-platform-tests/run-wpts.js, but restricted to the WPT directories
 // listed in WPT_DIRS (comma-separated, prefix match). Used by scripts/dev/test.js for sharded/selective runs.
 const path = require("node:path");
 const { describe, before, after } = require("mocha-sugar-free");
-const wptDir = path.resolve(__dirname, "../../test/web-platform-tests");
+const wptDir = path.resolve(__dirname, "../../tests/web-platform-tests");
 const { readManifest, getPossibleTestFilePaths } = require(path.join(wptDir, "wpt-manifest-utils.js"));
 const wptServer = require(path.join(wptDir, "wpt-server.js"));
 const { getURLPrefix, killSubprocess } = require(path.join(wptDir, "utils.js"));

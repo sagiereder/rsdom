@@ -1,6 +1,6 @@
 "use strict";
 
-const { XLINK_NS } = require("../../lib/jsdom/living/helpers/namespaces.js");
+const { XLINK_NS } = require("../../src/jsdom/living/helpers/namespaces.js");
 
 const recognizedReflectXAttrNames = new Set([
   "Reflect",

@@ -52,7 +52,7 @@ All these commands can be restricted to specific tests, e.g. `npm run test:tuwpt
 
 ## npm scripts
 
-Always use the project's npm scripts rather than running tools directly. Use `npm run lint` instead of `npx eslint`, `npm run test:api` instead of `npx mocha test/api`, etc. The scripts have specific configurations.
+Always use the project's npm scripts rather than running tools directly. Use `npm run lint` instead of `npx eslint`, `npm run test:api` instead of `npx mocha tests/api`, etc. The scripts have specific configurations.
 
 ## Coding style
 

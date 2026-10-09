@@ -4,8 +4,8 @@ const fs = require("node:fs/promises");
 const path = require("node:path");
 const { definitionSyntax } = require("css-tree");
 
-const outputDir = path.resolve(__dirname, "../lib/generated");
-const cssDir = path.resolve(__dirname, "../lib/jsdom/living/css");
+const outputDir = path.resolve(__dirname, "../src/generated");
+const cssDir = path.resolve(__dirname, "../src/jsdom/living/css");
 const propertiesDir = path.resolve(cssDir, "properties");
 
 // WebIDL keywords that must be escaped with a leading underscore.

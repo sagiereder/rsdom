@@ -13,19 +13,19 @@ Follow the repository's [agent instructions](../../../AGENTS.md) and [contributi
 
 - Inspect recent roll commits for the current project conventions and read the relevant test infrastructure before editing. Start a new roll from jsdom's `origin/main`; preserve unrelated work in a separate worktree when necessary.
 - Fetch the requested upstream tips and record both repositories' revisions. Determine WPT's actual default branch instead of assuming it is named `main`: it has used `master`.
-- Use the project's `npm run wpt:update` workflow to update the submodule and regenerate `test/web-platform-tests/wpt-manifest.json`. Inspect `.gitmodules` and the npm script to understand which branch it tracks. Keep the submodule revision and manifest consistent, and preserve the manifest's existing line endings.
+- Use the project's `npm run wpt:update` workflow to update the submodule and regenerate `tests/web-platform-tests/wpt-manifest.json`. Inspect `.gitmodules` and the npm script to understand which branch it tracks. Keep the submodule revision and manifest consistent, and preserve the manifest's existing line endings.
 - Save the original manifest, expectations, and local-test inventory outside the working tree when they are useful for comparison. Keep triage results reusable, so revising expectation scope does not require repeating expensive runs. Do not regenerate edits from an old snapshot over subsequent human edits.
 
 Useful implementation references, with paths relative to the repository root:
 
-- `test/web-platform-tests/wpt-manifest-utils.js`: manifest entries, generated URLs, and global exclusions.
-- `test/web-platform-tests/run-wpts.js` and `run-single-wpt.js` in the same directory: directory selection, test execution, and harness behavior.
-- `test/web-platform-tests/expectations-utils.js`: pattern precedence, expected failures, skips, canvas handling, and Node-version conditions.
-- `test/web-platform-tests/to-run.yaml` and `to-upstream-expectations.yaml`: upstream and local expectations.
+- `tests/web-platform-tests/wpt-manifest-utils.js`: manifest entries, generated URLs, and global exclusions.
+- `tests/web-platform-tests/run-wpts.js` and `run-single-wpt.js` in the same directory: directory selection, test execution, and harness behavior.
+- `tests/web-platform-tests/expectations-utils.js`: pattern precedence, expected failures, skips, canvas handling, and Node-version conditions.
+- `tests/web-platform-tests/to-run.yaml` and `to-upstream-expectations.yaml`: upstream and local expectations.
 
 ## Replace merged local tests without weakening regressions
 
-Inventory both ordinary and `-dont-upstream` files under `test/web-platform-tests/to-upstream`. A WPT roll can make either kind redundant.
+Inventory both ordinary and `-dont-upstream` files under `tests/web-platform-tests/to-upstream`. A WPT roll can make either kind redundant.
 
 For each candidate deletion:
 
@@ -50,7 +50,7 @@ Choose what is worth running before shortening individual failure entries:
 - Preserve existing intentional coverage and the migrated regressions. Then consider nearby tests exercising the same implemented behavior.
 - A tiny parsing fix does not justify enabling a whole animation, rendering, or navigation feature. Broad negative globs with focused exceptions are often the right result.
 - Keep useful parsing, serialization, CSSOM, state, reflection, and event coverage within otherwise unsupported areas. Do not retain files mechanically because their names contain `parsing`, `computed`, or `inheritance`; read what the assertions actually require.
-- Absence of a dedicated file in `lib/jsdom/living/css/properties` does not establish absence of parsing support. Check `scripts/generate-css-style-properties.js` and `lib/jsdom/living/css/helpers/generic-property-descriptor.js`: generic descriptors provide property handling too.
+- Absence of a dedicated file in `src/jsdom/living/css/properties` does not establish absence of parsing support. Check `scripts/generate-css-style-properties.js` and `src/jsdom/living/css/helpers/generic-property-descriptor.js`: generic descriptors provide property handling too.
 - Finishing quickly is not a reason to run hundreds of expected failures against absent APIs. Likewise, a passing test may only compare zero-valued geometry, compare `NaN` values, observe an ignored query, or execute an empty crash-test callback. Such results do not establish support for the surrounding feature.
 - Ask for calibration when the tradeoff is material. Present the concrete behavior, useful assertions, expectation cost, and a recommendation. Make the unambiguous local edits while the user considers the choice.
 

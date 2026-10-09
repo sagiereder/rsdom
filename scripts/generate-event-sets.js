@@ -3,8 +3,8 @@ const fs = require("node:fs");
 const path = require("node:path");
 const webidl2 = require("webidl2");
 
-const idlDir = path.resolve(__dirname, "../lib/jsdom/living/nodes");
-const dest = path.resolve(__dirname, "../lib/generated/event-sets.js");
+const idlDir = path.resolve(__dirname, "../src/jsdom/living/nodes");
+const dest = path.resolve(__dirname, "../src/generated/event-sets.js");
 
 function extractEventNames(idlPath) {
   const idlText = fs.readFileSync(idlPath, "utf-8");

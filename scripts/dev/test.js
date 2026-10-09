@@ -16,7 +16,7 @@ const path = require("node:path");
 const fs = require("node:fs");
 
 const root = path.resolve(__dirname, "../..");
-const wptDir = path.join(root, "test/web-platform-tests");
+const wptDir = path.join(root, "tests/web-platform-tests");
 const argv = process.argv.slice(2);
 const opt = name => {
   const i = argv.indexOf(name);
@@ -29,51 +29,51 @@ const verbose = flag("--verbose");
 // Changed path (regex) -> WPT dirs (prefix match against to-run.yaml DIRs) and whether API tests should run.
 const RELEVANCE = [
   [
-    /^native\/src\/(html|parse|tokeni|tree_builder)/, [
+    /^src\/native\/src\/(html|parse|tokeni|tree_builder)/, [
       "html/syntax", "domparsing", "html/semantics/scripting-1",
       "html/webappapis/dynamic-markup-insertion", "dom/nodes", "custom-elements", "shadow-dom"
     ]
   ],
-  [/^native\/src\/(css|style|cascade)/, ["css", "html/rendering", "dom/nodes/Element-matches", "html/semantics/selectors"]],
-  [/^native\/src\/(select|query)/, ["css/selectors", "dom/nodes", "html/semantics/selectors", "shadow-dom"]],
-  [/^native\/src\/(serial)/, ["domparsing", "html/syntax", "dom/nodes", "html/semantics/scripting-1/the-template-element"]],
-  [/^native\//, ["dom/nodes", "domparsing", "html/syntax", "html/dom", "css/selectors"]],
+  [/^src\/native\/src\/(css|style|cascade)/, ["css", "html/rendering", "dom/nodes/Element-matches", "html/semantics/selectors"]],
+  [/^src\/native\/src\/(select|query)/, ["css/selectors", "dom/nodes", "html/semantics/selectors", "shadow-dom"]],
+  [/^src\/native\/src\/(serial)/, ["domparsing", "html/syntax", "dom/nodes", "html/semantics/scripting-1/the-template-element"]],
+  [/^src\/native\//, ["dom/nodes", "domparsing", "html/syntax", "html/dom", "css/selectors"]],
   [
-    /^lib\/jsdom\/browser\/parser\//, [
+    /^src\/jsdom\/browser\/parser\//, [
       "html/syntax", "domparsing", "html/semantics/scripting-1", "dom/nodes",
       "html/webappapis/dynamic-markup-insertion", "custom-elements", "shadow-dom", "html/semantics/forms"
     ]
   ],
-  [/^lib\/jsdom\/living\/domparsing\//, ["domparsing", "html/syntax", "dom/nodes", "shadow-dom"]],
+  [/^src\/jsdom\/living\/domparsing\//, ["domparsing", "html/syntax", "dom/nodes", "shadow-dom"]],
   [
-    /^lib\/jsdom\/living\/css\//, [
+    /^src\/jsdom\/living\/css\//, [
       "css", "html/rendering", "html/semantics/document-metadata/the-style-element",
       "html/semantics/document-metadata/the-link-element"
     ]
   ],
-  [/^lib\/jsdom\/living\/helpers\/style-rules/, ["css", "html/rendering"]],
+  [/^src\/jsdom\/living\/helpers\/style-rules/, ["css", "html/rendering"]],
   [
-    /^lib\/jsdom\/living\/helpers\/(selectors|dom-tree|node|create-element|internal-constants)/, [
+    /^src\/jsdom\/living\/helpers\/(selectors|dom-tree|node|create-element|internal-constants)/, [
       "dom", "css/selectors",
       "html/semantics/selectors", "shadow-dom", "custom-elements", "domparsing", "html/dom"
     ]
   ],
   [
-    /^lib\/jsdom\/living\/(nodes|attributes|helpers)\//, [
+    /^src\/jsdom\/living\/(nodes|attributes|helpers)\//, [
       "dom", "html/dom", "shadow-dom", "custom-elements",
       "domparsing", "html/semantics", "html/syntax", "css/selectors", "css/cssom"
     ]
   ],
-  [/^lib\/jsdom\/living\/events\//, ["dom/events", "html/webappapis", "uievents", "pointerevents", "shadow-dom"]],
-  [/^lib\/jsdom\/living\/range\//, ["dom/ranges", "selection"]],
-  [/^lib\/jsdom\/living\/traversal\//, ["dom/traversal"]],
-  [/^lib\/jsdom\/living\/mutation-observer\//, ["dom/nodes", "custom-elements"]],
-  [/^lib\/jsdom\/living\/custom-elements\//, ["custom-elements"]],
-  [/^lib\/jsdom\/living\/xhr\//, ["xhr"]],
-  [/^lib\/jsdom\/living\/(window|navigator)\//, ["html/browsers", "html/webappapis"]],
-  [/^lib\/jsdom\/browser\//, ["html/browsers", "html/webappapis", "dom/nodes"]],
-  [/^lib\//, ["dom/nodes", "html/dom", "domparsing", "html/syntax"]],
-  [/^test\/web-platform-tests\/to-run\.yaml$/, ["*"]]
+  [/^src\/jsdom\/living\/events\//, ["dom/events", "html/webappapis", "uievents", "pointerevents", "shadow-dom"]],
+  [/^src\/jsdom\/living\/range\//, ["dom/ranges", "selection"]],
+  [/^src\/jsdom\/living\/traversal\//, ["dom/traversal"]],
+  [/^src\/jsdom\/living\/mutation-observer\//, ["dom/nodes", "custom-elements"]],
+  [/^src\/jsdom\/living\/custom-elements\//, ["custom-elements"]],
+  [/^src\/jsdom\/living\/xhr\//, ["xhr"]],
+  [/^src\/jsdom\/living\/(window|navigator)\//, ["html/browsers", "html/webappapis"]],
+  [/^src\/jsdom\/browser\//, ["html/browsers", "html/webappapis", "dom/nodes"]],
+  [/^src\//, ["dom/nodes", "html/dom", "domparsing", "html/syntax"]],
+  [/^tests\/web-platform-tests\/to-run\.yaml$/, ["*"]]
 ];
 
 function sh(cmd) {
@@ -186,11 +186,11 @@ async function pool(tasks, n) {
 }
 
 const API_TASKS = [
-  ["api", ["test/api/"]],
-  ["to-port-to-wpts", ["test/to-port-to-wpts/"]],
-  ["to-port-to-wpts/level1", ["test/to-port-to-wpts/level1/"]],
-  ["to-port-to-wpts/level2", ["test/to-port-to-wpts/level2/"]],
-  ["to-port-to-wpts/level3", ["test/to-port-to-wpts/level3/"]]
+  ["api", ["tests/api/"]],
+  ["to-port-to-wpts", ["tests/to-port-to-wpts/"]],
+  ["to-port-to-wpts/level1", ["tests/to-port-to-wpts/level1/"]],
+  ["to-port-to-wpts/level2", ["tests/to-port-to-wpts/level2/"]],
+  ["to-port-to-wpts/level3", ["tests/to-port-to-wpts/level3/"]]
 ];
 
 async function main() {
@@ -217,10 +217,10 @@ async function main() {
           break;
         }
       }
-      if (/^(lib|native)\//.test(f) || /^test\/(api|to-port)/.test(f)) {
+      if (/^src\//.test(f) || /^tests\/(api|to-port)/.test(f)) {
         runApi = true;
       }
-      if (/^test\/web-platform-tests\/to-upstream/.test(f) || /^lib\//.test(f)) {
+      if (/^tests\/web-platform-tests\/to-upstream/.test(f) || /^src\//.test(f)) {
         runTuwpt = true;
       }
     }
@@ -241,7 +241,7 @@ async function main() {
     }
   }
   if (runTuwpt) {
-    tasks.push(() => runMocha("to-upstream WPT", ["test/web-platform-tests/run-tuwpts.js"]));
+    tasks.push(() => runMocha("to-upstream WPT", ["tests/web-platform-tests/run-tuwpts.js"]));
   }
   if (selected.length) {
     await ensureServers();

@@ -8,36 +8,35 @@ import n from "eslint-plugin-n";
 const restrictedRequires = [
   {
     name: "@exodus/bytes/utf8.js",
-    message: "Use lib/jsdom/living/helpers/encoding.js instead."
+    message: "Use src/jsdom/living/helpers/encoding.js instead."
   },
   {
     name: "css-tree",
-    message: "Use lib/jsdom/living/css/helpers/patched-csstree.js instead."
+    message: "Use src/jsdom/living/css/helpers/patched-csstree.js instead."
   },
   {
     name: "@csstools/css-syntax-patches-for-csstree",
-    message: "Use lib/jsdom/living/css/helpers/patched-csstree.js instead."
+    message: "Use src/jsdom/living/css/helpers/patched-csstree.js instead."
   }
 ];
 
 export default [
   {
     ignores: [
-      "benchmark/selectors/sizzle-speed/**",
-      "bench-rs/**",
+      "bench/**",
       ".devshim/**",
-      "lib/jsdom/level3/xpath.js",
-      "lib/generated/**",
-      "test/api/fixtures/**",
-      "test/to-port-to-wpts/jquery-fixtures/**",
-      "test/to-port-to-wpts/files/**",
-      "test/to-port-to-wpts/frame.js",
-      "test/to-port-to-wpts/level1/**",
-      "test/to-port-to-wpts/level2/**",
-      "test/to-port-to-wpts/level3/**",
-      "test/to-port-to-wpts/script.js",
-      "test/web-platform-tests/tests/**",
-      "test/web-platform-tests/to-upstream/**/*dont-upstream*"
+      "src/jsdom/level3/xpath.js",
+      "src/generated/**",
+      "tests/api/fixtures/**",
+      "tests/to-port-to-wpts/jquery-fixtures/**",
+      "tests/to-port-to-wpts/files/**",
+      "tests/to-port-to-wpts/frame.js",
+      "tests/to-port-to-wpts/level1/**",
+      "tests/to-port-to-wpts/level2/**",
+      "tests/to-port-to-wpts/level3/**",
+      "tests/to-port-to-wpts/script.js",
+      "tests/web-platform-tests/tests/**",
+      "tests/web-platform-tests/to-upstream/**/*dont-upstream*"
     ]
   },
   {
@@ -76,7 +75,7 @@ export default [
     }
   },
   {
-    files: ["lib/**"],
+    files: ["src/**"],
     plugins: { n },
     rules: {
       "n/no-restricted-require": ["error", restrictedRequires],
@@ -114,19 +113,19 @@ export default [
     }
   },
   {
-    files: ["lib/jsdom/living/css/helpers/patched-csstree.js"],
+    files: ["src/jsdom/living/css/helpers/patched-csstree.js"],
     rules: {
       "n/no-restricted-require": ["error", restrictedRequires.filter(r => !r.name.includes("css"))]
     }
   },
   {
-    files: ["test/api/**"],
+    files: ["tests/api/**"],
     rules: {
       "no-loop-func": "off"
     }
   },
   {
-    files: ["test/web-platform-tests/to-upstream/**/*.{js,mjs,html}"],
+    files: ["tests/web-platform-tests/to-upstream/**/*.{js,mjs,html}"],
     plugins: { html },
     languageOptions: {
       sourceType: "script",
