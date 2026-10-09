@@ -1175,7 +1175,8 @@ where
                 Token::Tag(
                     tag!(<caption> | <col> | <colgroup> | <tbody> | <tfoot> | <thead> | </table>),
                 ) => {
-                    declare_tag_set!(table_outer = "table" "tbody" "tfoot");
+                    // parse5 (and the spec) check for tbody, thead or tfoot in table scope.
+                    declare_tag_set!(table_outer = "tbody" "thead" "tfoot");
                     if self.in_scope(p5_table_scope, |e| self.elem_in(&e, table_outer)) {
                         self.pop_until_current(table_body_context);
                         self.pop();
@@ -1231,15 +1232,13 @@ where
                 },
 
                 Token::Tag(tag @ tag!(</tbody> | </tfoot> | </thead>)) => {
-                    if self.in_scope_named(p5_table_scope, tag.name.clone()) {
-                        if self.in_scope_named(p5_table_scope, local_name!("tr")) {
-                            self.pop_until_current(table_row_context);
-                            let node = self.pop();
-                            self.assert_named(&node, local_name!("tr"));
-                            ProcessResult::Reprocess(InsertionMode::InTableBody, Token::Tag(tag))
-                        } else {
-                            ProcessResult::Done
-                        }
+                    // parse5 closes the row when either the section or a row is in table scope.
+                    if self.in_scope_named(p5_table_scope, tag.name.clone())
+                        || self.in_scope_named(p5_table_scope, local_name!("tr"))
+                    {
+                        self.pop_until_current(table_row_context);
+                        self.pop();
+                        ProcessResult::Reprocess(InsertionMode::InTableBody, Token::Tag(tag))
                     } else {
                         self.unexpected(&tag)
                     }
