@@ -161,12 +161,7 @@ const WRAPPER_LOOKUP_REPLACEMENT = `  static implForWrapper(wrapper) {
       ({ impl, interfaceDescriptor: wrapperInterfaceDescriptor } = data);
     }
 
-    if (wrapperInterfaceDescriptor?.inclusiveInheritedInterfaces[interfaceDescriptor.inheritanceDepth] !==
-        interfaceDescriptor) {
-      return null;
-    }
-
-    return impl;
+    return implementsInterface(wrapperInterfaceDescriptor, interfaceDescriptor) ? impl : null;
   }
 }
 
@@ -198,11 +193,75 @@ const { registerWrapper, implForWrapper, implForWrapperWithInterface } = Wrapper
 const { registerProxyWrapper } = ProxyWrapperData;
 `;
 
+// Interface descriptors as instances of one class with fixed fields. The original object literal turns its accessors
+// into data properties on first use, which puts every descriptor in dictionary mode and makes the brand checks below
+// (run on every operation and attribute access) do dictionary lookups.
+const INTERFACE_DESCRIPTOR_ORIGINAL = `function createInterfaceDescriptor(getParent) {
+  // A parent's module can import its child, so resolve ancestry only after the modules have loaded.
+  const descriptor = {
+    get inclusiveInheritedInterfaces() {
+      const interfaces = getParent ? [...getParent().inclusiveInheritedInterfaces, descriptor] : [descriptor];
+      Object.defineProperties(descriptor, {
+        inclusiveInheritedInterfaces: { value: interfaces },
+        inheritanceDepth: { value: interfaces.length - 1 }
+      });
+      return interfaces;
+    },
+    get inheritanceDepth() {
+      return descriptor.inclusiveInheritedInterfaces.length - 1;
+    }
+  };
+  return descriptor;
+}`;
+const INTERFACE_DESCRIPTOR_REPLACEMENT = `class InterfaceDescriptor {
+  constructor(getParent) {
+    // A parent's module can import its child, so resolve ancestry only after the modules have loaded.
+    this._getParent = getParent;
+    this._interfaces = null;
+    this._depth = -1;
+  }
+
+  get inclusiveInheritedInterfaces() {
+    if (this._interfaces === null) {
+      this._interfaces = this._getParent ?
+        [...this._getParent().inclusiveInheritedInterfaces, this] :
+        [this];
+      this._depth = this._interfaces.length - 1;
+    }
+    return this._interfaces;
+  }
+
+  get inheritanceDepth() {
+    if (this._depth === -1) {
+      return this.inclusiveInheritedInterfaces.length - 1;
+    }
+    return this._depth;
+  }
+}
+
+function createInterfaceDescriptor(getParent) {
+  return new InterfaceDescriptor(getParent);
+}
+
+// Whether a wrapper registered with \`wrapperInterfaceDescriptor\` implements the interface \`interfaceDescriptor\`.
+function implementsInterface(wrapperInterfaceDescriptor, interfaceDescriptor) {
+  if (wrapperInterfaceDescriptor === interfaceDescriptor) {
+    return true;
+  }
+  if (wrapperInterfaceDescriptor === undefined) {
+    return false;
+  }
+  const interfaces = wrapperInterfaceDescriptor._interfaces ?? wrapperInterfaceDescriptor.inclusiveInheritedInterfaces;
+  const depth = interfaceDescriptor._depth === -1 ? interfaceDescriptor.inheritanceDepth : interfaceDescriptor._depth;
+  return interfaces[depth] === interfaceDescriptor;
+}`;
+
 function postProcessUtils() {
   const utilsPath = path.resolve(outputDir, "utils.js");
   let source = fs.readFileSync(utilsPath, "utf8");
   for (const [original, replacement] of [
     [ARRAY_INDEX_ORIGINAL, ARRAY_INDEX_FAST],
+    [INTERFACE_DESCRIPTOR_ORIGINAL, INTERFACE_DESCRIPTOR_REPLACEMENT],
     [WRAPPER_LOOKUP_ORIGINAL, WRAPPER_LOOKUP_REPLACEMENT],
     ["  registerWrapper,\n", "  registerWrapper,\n  registerProxyWrapper,\n"]
   ]) {
@@ -314,6 +373,32 @@ function postProcessProxyWrapper(file) {
 `;
     handler = handler.slice(0, getStart) + get + handler.slice(getEnd);
   }
+
+  // [[Set]] without an own (indexed) property descriptor is OrdinarySet on the target, which looks up the target's own
+  // property itself; this avoids allocating its descriptor and a second prototype lookup.
+  const setTail = `
+    if (ownDesc === undefined) {
+      ownDesc = Reflect.getOwnPropertyDescriptor(target, P);
+    }
+    return utils.ordinarySetWithOwnDescriptor(target, P, V, receiver, ownDesc);
+`;
+  if (!handler.includes(setTail)) {
+    fail("set trap fallthrough");
+  }
+  handler = handler.replace(setTail, `
+    if (ownDesc === undefined) {
+      return Reflect.set(target, P, V, receiver);
+    }
+    return utils.ordinarySetWithOwnDescriptor(target, P, V, receiver, ownDesc);
+`);
+  // The set trap of an interface without indexed or named property setters checks the receiver for nothing.
+  handler = handler.replace(`
+    // The \`receiver\` argument refers to the Proxy exotic object or an object
+    // that inherits from it, whereas \`target\` refers to the Proxy target:
+    if (utils.wrapperForImpl(impl) === receiver) {
+      const globalObject = this._globalObject;
+    }
+`, "\n");
 
   let head = before;
   if (hasRequireImpl) {
