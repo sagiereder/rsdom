@@ -293,6 +293,155 @@ function postProcessUtils() {
   fs.writeFileSync(utilsPath, source);
 }
 
+// The has trap only needs to know whether the proxy has an own property, so it uses a copy of the
+// getOwnPropertyDescriptor trap that answers with a boolean instead of allocating a property descriptor. The copy
+// computes everything the original computes, except the descriptor objects themselves.
+function postProcessHasTrap(handler, fail) {
+  const gopdHeader = "\n  getOwnPropertyDescriptor(target, P) {\n";
+  const gopdStart = handler.indexOf(gopdHeader);
+  const hasLookup = `
+    const desc = this.getOwnPropertyDescriptor(target, P);
+    if (desc !== undefined) {
+      return true;
+    }
+`;
+  if (gopdStart === -1 || !handler.includes(hasLookup)) {
+    fail("has and getOwnPropertyDescriptor traps");
+  }
+  const gopdEnd = handler.indexOf("\n  }\n", gopdStart) + "\n  }\n".length;
+  const hasOwn = handler.slice(gopdStart, gopdEnd)
+    .replace(gopdHeader, "\n  $hasOwnProperty(target, P) {\n")
+    .replace(/return \{\n[^{}]*\n *\};/gu, "return true;")
+    .replaceAll("return Reflect.getOwnPropertyDescriptor(target, P);", "return Object.hasOwn(target, P);");
+  if (/getOwnPropertyDescriptor|return \{/u.test(hasOwn)) {
+    fail("getOwnPropertyDescriptor descriptors");
+  }
+  return `${handler.slice(0, gopdEnd)}${hasOwn}${handler.slice(gopdEnd)}`.replace(hasLookup, `
+    if (this.$hasOwnProperty(target, P)) {
+      return true;
+    }
+`);
+}
+
+// The named property visibility check asks whether the proxy's prototype is the interface prototype (and whether that
+// has the property). Only the proxy's [[SetPrototypeOf]] can change its target's prototype, so the target's brand
+// records the answer when the proxy is made and the setPrototypeOf trap keeps it current; the check then reads a
+// private field instead of calling Object.getPrototypeOf. Returns the rewritten handler, or null if it has no such
+// check.
+const PROTOTYPE_LIST_CHECK = `  _hasPrototypeProperty(target, P) {
+    // The prototypes captured during installation are ordinary. Check each live link before
+    // inspecting the next prototype so later changes cannot introduce observable Proxy traps.
+    for (let i = 0; i < this._interfacePrototypes.length; ++i) {
+      const prototype = this._interfacePrototypes[i];
+      if (Object.getPrototypeOf(target) !== prototype) {
+        return false;
+      }
+      if (Object.hasOwn(prototype, P)) {
+        return true;
+      }
+      target = prototype;
+    }
+    return false;
+  }
+`;
+const PROTOTYPE_LIST_CHECK_FAST = `  _hasPrototypeProperty(target, P) {
+    // The prototypes captured during installation are ordinary. Check each live link before
+    // inspecting the next prototype so later changes cannot introduce observable Proxy traps.
+    if (!$TargetBrand.prototypeIsInterface(target)) {
+      return false;
+    }
+    const prototypes = this._interfacePrototypes;
+    for (let i = 0; ; ) {
+      const prototype = prototypes[i];
+      if (Object.hasOwn(prototype, P)) {
+        return true;
+      }
+      if (++i === prototypes.length || Object.getPrototypeOf(prototype) !== prototypes[i]) {
+        return false;
+      }
+    }
+  }
+
+  $isInterfacePrototype(prototype) {
+    return this._interfacePrototypes.length !== 0 && prototype === this._interfacePrototypes[0];
+  }
+`;
+const PROTOTYPE_CHECK = new RegExp(
+  String.raw`this\._interfacePrototype !== null &&\n +` +
+  String.raw`Object\.getPrototypeOf\(target\) === this\._interfacePrototype &&`,
+  "gu"
+);
+const PROTOTYPE_CHECK_FAST = "$TargetBrand.prototypeIsInterface(target) &&";
+const IS_INTERFACE_PROTOTYPE = `
+  $isInterfacePrototype(prototype) {
+    return prototype !== null && prototype === this._interfacePrototype;
+  }
+`;
+const SET_PROTOTYPE_TRAP = `
+  setPrototypeOf(target, V) {
+    if (!Reflect.setPrototypeOf(target, V)) {
+      return false;
+    }
+    $TargetBrand.setPrototypeIsInterface(target, this.$isInterfacePrototype(V));
+    return true;
+  }
+`;
+
+function postProcessPrototypeCheck(handler, fail) {
+  let result;
+  if (handler.includes(PROTOTYPE_LIST_CHECK)) {
+    result = handler.replace(PROTOTYPE_LIST_CHECK, PROTOTYPE_LIST_CHECK_FAST);
+  } else if (handler.replace(PROTOTYPE_CHECK, PROTOTYPE_CHECK_FAST) !== handler) {
+    result = handler.replace(PROTOTYPE_CHECK, PROTOTYPE_CHECK_FAST);
+    const constructorEnd = handler.indexOf("\n  }\n", handler.indexOf("\n  constructor(")) + "\n  }\n".length;
+    result = result.replace(
+      result.slice(0, constructorEnd),
+      `${result.slice(0, constructorEnd)}${IS_INTERFACE_PROTOTYPE}`
+    );
+  } else {
+    return null;
+  }
+  if (result.includes("=== this._interfacePrototype &&") || result.includes("setPrototypeOf(target, V)")) {
+    fail("prototype checks");
+  }
+  const end = "\n  preventExtensions() {\n";
+  if (!result.includes(end)) {
+    fail("preventExtensions trap");
+  }
+  return result.replace(end, `${SET_PROTOTYPE_TRAP}${end}`);
+}
+
+// The indexed getters of these interfaces return a node or null, so the get trap reads the node's wrapper itself; the
+// shared utils.tryWrapperForImpl() is megamorphic.
+const INLINE_WRAPPER_INTERFACES = new Set([
+  "HTMLCollection",
+  "HTMLFormControlsCollection",
+  "HTMLOptionsCollection",
+  "HTMLSelectElement",
+  "NodeList",
+  "RadioNodeList"
+]);
+
+function postProcessIndexedWrapper(handler, fail) {
+  const getStart = handler.indexOf("\n  get(target, P, receiver) {\n");
+  const indexed = `
+      const indexedValue = impl.item(index);
+      if (indexedValue !== null) {
+        return utils.tryWrapperForImpl(indexedValue);
+      }
+`;
+  const at = handler.indexOf(indexed, getStart);
+  if (getStart === -1 || at === -1 || at > handler.indexOf("\n  }\n", getStart)) {
+    fail("get trap indexed getter");
+  }
+  return `${handler.slice(0, at)}
+      const indexedValue = impl.item(index);
+      if (indexedValue !== null) {
+        return indexedValue[utils.wrapperSymbol] ?? indexedValue;
+      }
+${handler.slice(at + indexed.length)}`;
+}
+
 // Post-process the generated legacy platform object wrappers (the ones implemented as proxies):
 //  - Proxy targets get a brand private to their module, so the traps find the implementation with a monomorphic
 //    private field lookup instead of the megamorphic one in utils.implForWrapper().
@@ -310,14 +459,24 @@ class $ReturnValue {
 
 class $TargetBrand extends $ReturnValue {
   #impl;
+  #prototypeIsInterface;
 
-  constructor(target, impl) {
+  constructor(target, impl, prototypeIsInterface = false) {
     super(target);
     this.#impl = impl;
+    this.#prototypeIsInterface = prototypeIsInterface;
   }
 
   static implFor(target) {
     return target.#impl;
+  }
+
+  static prototypeIsInterface(target) {
+    return target.#prototypeIsInterface;
+  }
+
+  static setPrototypeIsInterface(target, value) {
+    target.#prototypeIsInterface = value;
   }
 }
 `;
@@ -420,7 +579,23 @@ function postProcessProxyWrapper(file) {
     }
 `, "\n");
 
+  handler = postProcessHasTrap(handler, fail);
+  const prototypeFlag = postProcessPrototypeCheck(handler, fail);
   let head = before;
+  if (prototypeFlag !== null) {
+    handler = prototypeFlag;
+    const brand = "  new $TargetBrand(wrapper, impl);\n";
+    if (!head.includes(brand)) {
+      fail("makeProxy target brand");
+    }
+    head = head.replace(
+      brand,
+      "  new $TargetBrand(wrapper, impl, proxyHandler.$isInterfacePrototype(Object.getPrototypeOf(wrapper)));\n"
+    );
+  }
+  if (INLINE_WRAPPER_INTERFACES.has(path.basename(file, ".js"))) {
+    handler = postProcessIndexedWrapper(handler, fail);
+  }
   if (hasRequireImpl) {
     head = head.replace(
       requireImpl,
