@@ -1,0 +1,2179 @@
+{
+  "date": "2026-10-09T13:57:00.528Z",
+  "gitRev": "b69f01f",
+  "node": "v24.21.0",
+  "platform": "darwin arm64",
+  "cpu": "Apple M4",
+  "impls": [
+    "upstream",
+    "fork-js",
+    "fork"
+  ],
+  "baseline": "upstream",
+  "opts": {
+    "warmup": 3,
+    "iters": 10,
+    "budgetMs": 30000
+  },
+  "geomeanSpeedup": {
+    "fork-js": 1.014630728037046,
+    "fork": 0.9323022360386501
+  },
+  "rows": [
+    {
+      "scenario": "divs/create-dom-api",
+      "group": "divs",
+      "desc": "create 20000 divs via createElement + className + textContent + appendChild",
+      "results": {
+        "upstream": {
+          "impl": "upstream",
+          "scenario": "divs/create-dom-api",
+          "native": false,
+          "warmup": 3,
+          "times": [
+            58.1145,
+            62.978667,
+            59.817875,
+            63.782292,
+            65.855416,
+            69.228833,
+            61.344,
+            68.01425,
+            65.604125,
+            66.120792
+          ],
+          "median": 64.6932085,
+          "min": 58.1145,
+          "max": 69.228833,
+          "mean": 64.08607500000001,
+          "rssMB": 905
+        },
+        "fork-js": {
+          "impl": "fork-js",
+          "scenario": "divs/create-dom-api",
+          "native": false,
+          "warmup": 3,
+          "times": [
+            58.955959,
+            63.575666,
+            60.096667,
+            60.493083,
+            63.306083,
+            63.524334,
+            61.3885,
+            66.622375,
+            66.077166,
+            64.003458
+          ],
+          "median": 63.415208500000006,
+          "min": 58.955959,
+          "max": 66.622375,
+          "mean": 62.804329100000004,
+          "rssMB": 905
+        },
+        "fork": {
+          "impl": "fork",
+          "scenario": "divs/create-dom-api",
+          "native": true,
+          "warmup": 3,
+          "times": [
+            57.744916,
+            62.549875,
+            60.981125,
+            60.704166,
+            64.449416,
+            61.802291,
+            63.953333,
+            67.661708,
+            68.489667,
+            70.19375
+          ],
+          "median": 63.251604,
+          "min": 57.744916,
+          "max": 70.19375,
+          "mean": 63.853024700000006,
+          "rssMB": 905
+        }
+      },
+      "speedups": {
+        "fork-js": 1.020152894395987,
+        "fork": 1.0227915880204397
+      }
+    },
+    {
+      "scenario": "divs/innerHTML",
+      "group": "divs",
+      "desc": "set innerHTML with 20000 divs, read back childElementCount",
+      "results": {
+        "upstream": {
+          "impl": "upstream",
+          "scenario": "divs/innerHTML",
+          "native": false,
+          "warmup": 3,
+          "times": [
+            159.9675,
+            159.604541,
+            165.494333,
+            174.975041,
+            173.134542,
+            175.144875,
+            178.004042,
+            184.750916,
+            185.057167,
+            187.5085
+          ],
+          "median": 175.059958,
+          "min": 159.604541,
+          "max": 187.5085,
+          "mean": 174.3641457,
+          "rssMB": 1107
+        },
+        "fork-js": {
+          "impl": "fork-js",
+          "scenario": "divs/innerHTML",
+          "native": false,
+          "warmup": 3,
+          "times": [
+            164.250125,
+            159.704792,
+            166.359,
+            170.819584,
+            179.141333,
+            172.484833,
+            176.993666,
+            180.491958,
+            181.464209,
+            182.586125
+          ],
+          "median": 174.7392495,
+          "min": 159.704792,
+          "max": 182.586125,
+          "mean": 173.42956250000003,
+          "rssMB": 1109
+        },
+        "fork": {
+          "impl": "fork",
+          "scenario": "divs/innerHTML",
+          "native": true,
+          "warmup": 3,
+          "times": [
+            159.290583,
+            162.545125,
+            160.083708,
+            173.766792,
+            179.469625,
+            178.348792,
+            182.857625,
+            180.911958,
+            179.233375,
+            184.767667
+          ],
+          "median": 178.7910835,
+          "min": 159.290583,
+          "max": 184.767667,
+          "mean": 174.12752500000002,
+          "rssMB": 1109
+        }
+      },
+      "speedups": {
+        "fork-js": 1.0018353546837226,
+        "fork": 0.9791313670292735
+      }
+    },
+    {
+      "scenario": "lists/create-dom-api",
+      "group": "lists",
+      "desc": "create ul with 10000 li via DOM API (setAttribute, classList, append text)",
+      "results": {
+        "upstream": {
+          "impl": "upstream",
+          "scenario": "lists/create-dom-api",
+          "native": false,
+          "warmup": 3,
+          "times": [
+            47.17075,
+            47.536333,
+            45.525917,
+            49.620042,
+            47.664833,
+            47.7445,
+            48.919083,
+            50.653916,
+            48.691041,
+            51.462625
+          ],
+          "median": 48.2177705,
+          "min": 45.525917,
+          "max": 51.462625,
+          "mean": 48.498903999999996,
+          "rssMB": 671
+        },
+        "fork-js": {
+          "impl": "fork-js",
+          "scenario": "lists/create-dom-api",
+          "native": false,
+          "warmup": 3,
+          "times": [
+            45.614917,
+            48.062834,
+            45.215625,
+            48.4025,
+            46.249916,
+            45.67275,
+            48.968625,
+            48.035167,
+            47.345792,
+            50.790708
+          ],
+          "median": 47.6904795,
+          "min": 45.215625,
+          "max": 50.790708,
+          "mean": 47.43588340000001,
+          "rssMB": 671
+        },
+        "fork": {
+          "impl": "fork",
+          "scenario": "lists/create-dom-api",
+          "native": true,
+          "warmup": 3,
+          "times": [
+            46.540292,
+            47.257,
+            44.978333,
+            49.374166,
+            48.924542,
+            46.661917,
+            48.514042,
+            48.894458,
+            46.5025,
+            53.041167
+          ],
+          "median": 47.885521,
+          "min": 44.978333,
+          "max": 53.041167,
+          "mean": 48.06884169999999,
+          "rssMB": 671
+        }
+      },
+      "speedups": {
+        "fork-js": 1.0110565254434063,
+        "fork": 1.0069384125527214
+      }
+    },
+    {
+      "scenario": "lists/innerHTML",
+      "group": "lists",
+      "desc": "ul.innerHTML with 10000 li",
+      "results": {
+        "upstream": {
+          "impl": "upstream",
+          "scenario": "lists/innerHTML",
+          "native": false,
+          "warmup": 3,
+          "times": [
+            88.351584,
+            87.563459,
+            91.461834,
+            96.400083,
+            97.162459,
+            99.814375,
+            96.968541,
+            98.33625,
+            96.606375,
+            99.750792
+          ],
+          "median": 96.787458,
+          "min": 87.563459,
+          "max": 99.814375,
+          "mean": 95.2415752,
+          "rssMB": 640
+        },
+        "fork-js": {
+          "impl": "fork-js",
+          "scenario": "lists/innerHTML",
+          "native": false,
+          "warmup": 3,
+          "times": [
+            87.60275,
+            87.908708,
+            90.095042,
+            96.169333,
+            94.035833,
+            96.910584,
+            98.669333,
+            98.43325,
+            94.196458,
+            98.692541
+          ],
+          "median": 95.1828955,
+          "min": 87.60275,
+          "max": 98.692541,
+          "mean": 94.27138319999999,
+          "rssMB": 639
+        },
+        "fork": {
+          "impl": "fork",
+          "scenario": "lists/innerHTML",
+          "native": true,
+          "warmup": 3,
+          "times": [
+            87.566125,
+            87.211459,
+            90.785292,
+            94.432375,
+            96.436542,
+            93.709333,
+            95.811625,
+            96.606333,
+            96.977834,
+            101.529417
+          ],
+          "median": 95.122,
+          "min": 87.211459,
+          "max": 101.529417,
+          "mean": 94.1066335,
+          "rssMB": 640
+        }
+      },
+      "speedups": {
+        "fork-js": 1.0168576769131803,
+        "fork": 1.017508652046845
+      }
+    },
+    {
+      "scenario": "lists/query-iterate-read",
+      "group": "lists",
+      "desc": "on a 10000-li list: querySelectorAll('li'), children/sibling iteration, textContent + dataset reads (x5)",
+      "results": {
+        "upstream": {
+          "impl": "upstream",
+          "scenario": "lists/query-iterate-read",
+          "native": false,
+          "warmup": 3,
+          "times": [
+            96.806167,
+            95.267167,
+            91.9935,
+            94.559875,
+            90.689792,
+            94.220583,
+            96.596375,
+            96.318917,
+            94.523042,
+            97.558916
+          ],
+          "median": 94.913521,
+          "min": 90.689792,
+          "max": 97.558916,
+          "mean": 94.8534334,
+          "rssMB": 810
+        },
+        "fork-js": {
+          "impl": "fork-js",
+          "scenario": "lists/query-iterate-read",
+          "native": false,
+          "warmup": 3,
+          "times": [
+            93.082583,
+            94.513417,
+            90.970625,
+            103.282291,
+            97.981875,
+            94.635167,
+            96.653792,
+            92.378375,
+            93.439041,
+            96.905792
+          ],
+          "median": 94.574292,
+          "min": 90.970625,
+          "max": 103.282291,
+          "mean": 95.38429579999999,
+          "rssMB": 809
+        },
+        "fork": {
+          "impl": "fork",
+          "scenario": "lists/query-iterate-read",
+          "native": true,
+          "warmup": 3,
+          "times": [
+            97.612875,
+            96.573792,
+            94.37925,
+            97.7625,
+            93.491208,
+            95.464416,
+            92.1195,
+            98.959625,
+            90.939791,
+            98.8625
+          ],
+          "median": 96.019104,
+          "min": 90.939791,
+          "max": 98.959625,
+          "mean": 95.61654569999999,
+          "rssMB": 809
+        }
+      },
+      "speedups": {
+        "fork-js": 1.003586904991052,
+        "fork": 0.98848580174212
+      }
+    },
+    {
+      "scenario": "large/innerHTML-parse",
+      "group": "large",
+      "desc": "parse ~50k-node nested/wide tree via innerHTML",
+      "results": {
+        "upstream": {
+          "impl": "upstream",
+          "scenario": "large/innerHTML-parse",
+          "native": false,
+          "warmup": 3,
+          "times": [
+            303.497083,
+            303.586375,
+            322.787541,
+            328.501292,
+            336.534042,
+            334.694542,
+            337.992583,
+            339.324291,
+            343.667583,
+            354.553375
+          ],
+          "median": 335.614292,
+          "min": 303.497083,
+          "max": 354.553375,
+          "mean": 330.5138707,
+          "rssMB": 1605
+        },
+        "fork-js": {
+          "impl": "fork-js",
+          "scenario": "large/innerHTML-parse",
+          "native": false,
+          "warmup": 3,
+          "times": [
+            290.3905,
+            313.200041,
+            308.484416,
+            312.692916,
+            325.315334,
+            334.230083,
+            327.788917,
+            336.279916,
+            344.620125,
+            354.653125
+          ],
+          "median": 326.5521255,
+          "min": 290.3905,
+          "max": 354.653125,
+          "mean": 324.76553729999995,
+          "rssMB": 1615
+        },
+        "fork": {
+          "impl": "fork",
+          "scenario": "large/innerHTML-parse",
+          "native": true,
+          "warmup": 3,
+          "times": [
+            295.335459,
+            301.783709,
+            311.475459,
+            322.756166,
+            323.144,
+            346.056916,
+            327.269042,
+            338.860583,
+            337.124458,
+            334.012667
+          ],
+          "median": 325.206521,
+          "min": 295.335459,
+          "max": 346.056916,
+          "mean": 323.7818459,
+          "rssMB": 1615
+        }
+      },
+      "speedups": {
+        "fork-js": 1.027751056546101,
+        "fork": 1.0320035741226725
+      }
+    },
+    {
+      "scenario": "large/jsdom-full-parse",
+      "group": "large",
+      "desc": "new JSDOM(html) with ~50k-node body",
+      "results": {
+        "upstream": {
+          "impl": "upstream",
+          "scenario": "large/jsdom-full-parse",
+          "native": false,
+          "warmup": 3,
+          "times": [
+            235.58425,
+            227.133083,
+            231.237959,
+            238.923042,
+            242.619417,
+            251.758083,
+            244.702584,
+            250.972167,
+            251.154541,
+            261.3515
+          ],
+          "median": 243.6610005,
+          "min": 227.133083,
+          "max": 261.3515,
+          "mean": 243.54366259999998,
+          "rssMB": 1588
+        },
+        "fork-js": {
+          "impl": "fork-js",
+          "scenario": "large/jsdom-full-parse",
+          "native": false,
+          "warmup": 3,
+          "times": [
+            228.06,
+            233.86325,
+            227.117917,
+            237.537667,
+            242.796791,
+            241.782625,
+            250.042,
+            259.634292,
+            255.110834,
+            263.062958
+          ],
+          "median": 242.28970800000002,
+          "min": 227.117917,
+          "max": 263.062958,
+          "mean": 243.90083339999995,
+          "rssMB": 1587
+        },
+        "fork": {
+          "impl": "fork",
+          "scenario": "large/jsdom-full-parse",
+          "native": true,
+          "warmup": 3,
+          "times": [
+            233.862917,
+            256.769291,
+            242.966875,
+            247.015625,
+            245.292083,
+            250.904459,
+            250.696375,
+            258.1795,
+            264.997,
+            270.631166
+          ],
+          "median": 250.80041699999998,
+          "min": 233.862917,
+          "max": 270.631166,
+          "mean": 252.1315291,
+          "rssMB": 1588
+        }
+      },
+      "speedups": {
+        "fork-js": 1.005659722450943,
+        "fork": 0.9715334743641993
+      }
+    },
+    {
+      "scenario": "large/serialize-outerHTML",
+      "group": "large",
+      "desc": "body.outerHTML of ~50k-node tree (x4)",
+      "results": {
+        "upstream": {
+          "impl": "upstream",
+          "scenario": "large/serialize-outerHTML",
+          "native": false,
+          "warmup": 3,
+          "times": [
+            76.002542,
+            75.760542,
+            74.722583,
+            82.089917,
+            77.104667,
+            78.44675,
+            84.228083,
+            79.369541,
+            77.841167,
+            90.090083
+          ],
+          "median": 78.1439585,
+          "min": 74.722583,
+          "max": 90.090083,
+          "mean": 79.56558750000002,
+          "rssMB": 1603
+        },
+        "fork-js": {
+          "impl": "fork-js",
+          "scenario": "large/serialize-outerHTML",
+          "native": false,
+          "warmup": 3,
+          "times": [
+            74.236625,
+            71.529584,
+            74.146417,
+            77.684208,
+            82.162333,
+            77.270458,
+            83.190167,
+            79.295708,
+            87.318084,
+            90.968958
+          ],
+          "median": 78.489958,
+          "min": 71.529584,
+          "max": 90.968958,
+          "mean": 79.7802542,
+          "rssMB": 1601
+        },
+        "fork": {
+          "impl": "fork",
+          "scenario": "large/serialize-outerHTML",
+          "native": true,
+          "warmup": 3,
+          "times": [
+            74.296667,
+            71.720042,
+            70.542291,
+            78.673208,
+            76.051666,
+            78.076834,
+            85.621625,
+            76.646,
+            81.476208,
+            91.802583
+          ],
+          "median": 77.361417,
+          "min": 70.542291,
+          "max": 91.802583,
+          "mean": 78.4907124,
+          "rssMB": 1605
+        }
+      },
+      "speedups": {
+        "fork-js": 0.9955917991445479,
+        "fork": 1.0101153977052928
+      }
+    },
+    {
+      "scenario": "large/serialize-dom",
+      "group": "large",
+      "desc": "dom.serialize() of ~50k-node document (x4)",
+      "results": {
+        "upstream": {
+          "impl": "upstream",
+          "scenario": "large/serialize-dom",
+          "native": false,
+          "warmup": 3,
+          "times": [
+            63.823167,
+            63.729458,
+            62.3415,
+            70.142167,
+            67.831125,
+            65.09075,
+            78.035625,
+            69.493583,
+            70.4545,
+            87.86975
+          ],
+          "median": 68.662354,
+          "min": 62.3415,
+          "max": 87.86975,
+          "mean": 69.88116249999999,
+          "rssMB": 1600
+        },
+        "fork-js": {
+          "impl": "fork-js",
+          "scenario": "large/serialize-dom",
+          "native": false,
+          "warmup": 3,
+          "times": [
+            66.06,
+            64.43375,
+            63.267167,
+            69.580917,
+            68.044959,
+            69.884833,
+            80.025666,
+            71.9955,
+            72.95175,
+            83.772709
+          ],
+          "median": 69.732875,
+          "min": 63.267167,
+          "max": 83.772709,
+          "mean": 71.00172510000002,
+          "rssMB": 1599
+        },
+        "fork": {
+          "impl": "fork",
+          "scenario": "large/serialize-dom",
+          "native": true,
+          "warmup": 3,
+          "times": [
+            67.043334,
+            59.350958,
+            72.244209,
+            70.953667,
+            68.631041,
+            67.725709,
+            75.709667,
+            72.781417,
+            68.779334,
+            82.090334
+          ],
+          "median": 69.8665005,
+          "min": 59.350958,
+          "max": 82.090334,
+          "mean": 70.530967,
+          "rssMB": 1600
+        }
+      },
+      "speedups": {
+        "fork-js": 0.984648259518914,
+        "fork": 0.9827650377307791
+      }
+    },
+    {
+      "scenario": "large/cloneNode-deep",
+      "group": "large",
+      "desc": "cloneNode(true) of ~50k-node tree and append it",
+      "results": {
+        "upstream": {
+          "impl": "upstream",
+          "scenario": "large/cloneNode-deep",
+          "native": false,
+          "warmup": 3,
+          "times": [
+            212.361792,
+            217.185958,
+            223.41375,
+            247.951541,
+            239.927708,
+            247.336583,
+            246.285333,
+            248.808667,
+            259.39075,
+            255.651042
+          ],
+          "median": 246.810958,
+          "min": 212.361792,
+          "max": 259.39075,
+          "mean": 239.83131239999997,
+          "rssMB": 2828
+        },
+        "fork-js": {
+          "impl": "fork-js",
+          "scenario": "large/cloneNode-deep",
+          "native": false,
+          "warmup": 3,
+          "times": [
+            219.968959,
+            223.315042,
+            229.655625,
+            236.206542,
+            233.554209,
+            246.075125,
+            240.232875,
+            243.826709,
+            262.74675,
+            259.674625
+          ],
+          "median": 238.21970850000002,
+          "min": 219.968959,
+          "max": 262.74675,
+          "mean": 239.5256461,
+          "rssMB": 2837
+        },
+        "fork": {
+          "impl": "fork",
+          "scenario": "large/cloneNode-deep",
+          "native": true,
+          "warmup": 3,
+          "times": [
+            219.411583,
+            213.491959,
+            226.73075,
+            229.5035,
+            230.592583,
+            237.657875,
+            246.897375,
+            251.846625,
+            260.656625,
+            270.287625
+          ],
+          "median": 234.125229,
+          "min": 213.491959,
+          "max": 270.287625,
+          "mean": 238.70764999999997,
+          "rssMB": 2740
+        }
+      },
+      "speedups": {
+        "fork-js": 1.0360643943110188,
+        "fork": 1.0541835198802945
+      }
+    },
+    {
+      "scenario": "tables/parse-innerHTML",
+      "group": "tables",
+      "desc": "parse 5000x10 table via innerHTML",
+      "results": {
+        "upstream": {
+          "impl": "upstream",
+          "scenario": "tables/parse-innerHTML",
+          "native": false,
+          "warmup": 3,
+          "times": [
+            347.64975,
+            370.434541,
+            366.024041,
+            386.289583,
+            378.569625,
+            390.453542,
+            392.748667,
+            393.387958,
+            402.685625,
+            412.899875
+          ],
+          "median": 388.3715625,
+          "min": 347.64975,
+          "max": 412.899875,
+          "mean": 384.1143207,
+          "rssMB": 2094
+        },
+        "fork-js": {
+          "impl": "fork-js",
+          "scenario": "tables/parse-innerHTML",
+          "native": false,
+          "warmup": 3,
+          "times": [
+            350.076375,
+            367.97725,
+            372.78375,
+            375.095125,
+            393.001958,
+            395.693541,
+            392.474083,
+            398.387166,
+            401.185875,
+            398.877209
+          ],
+          "median": 392.7380205,
+          "min": 350.076375,
+          "max": 401.185875,
+          "mean": 384.55523320000003,
+          "rssMB": 2093
+        },
+        "fork": {
+          "impl": "fork",
+          "scenario": "tables/parse-innerHTML",
+          "native": true,
+          "warmup": 3,
+          "times": [
+            345.52225,
+            369.254417,
+            372.001625,
+            386.377917,
+            391.428791,
+            401.1865,
+            387.239041,
+            402.360583,
+            390.615459,
+            397.904834
+          ],
+          "median": 388.92724999999996,
+          "min": 345.52225,
+          "max": 402.360583,
+          "mean": 384.3891417,
+          "rssMB": 2093
+        }
+      },
+      "speedups": {
+        "fork-js": 0.9888820084328962,
+        "fork": 0.9985712302236472
+      }
+    },
+    {
+      "scenario": "tables/rows-cells-access",
+      "group": "tables",
+      "desc": "iterate table.rows / row.cells, read textContent of every cell (x3)",
+      "results": {
+        "upstream": {
+          "impl": "upstream",
+          "scenario": "tables/rows-cells-access",
+          "native": false,
+          "warmup": 3,
+          "times": [
+            81.487084,
+            84.244792,
+            84.984916,
+            94.423833,
+            101.2125,
+            102.958375,
+            109.783042,
+            107.803625,
+            114.229833,
+            124.843833
+          ],
+          "median": 102.08543750000001,
+          "min": 81.487084,
+          "max": 124.843833,
+          "mean": 100.59718330000001,
+          "rssMB": 2091
+        },
+        "fork-js": {
+          "impl": "fork-js",
+          "scenario": "tables/rows-cells-access",
+          "native": false,
+          "warmup": 3,
+          "times": [
+            89.052208,
+            100.243834,
+            97.557292,
+            101.127459,
+            106.180584,
+            105.745292,
+            113.228875,
+            111.018333,
+            118.904375,
+            124.3425
+          ],
+          "median": 105.96293800000001,
+          "min": 89.052208,
+          "max": 124.3425,
+          "mean": 106.7400752,
+          "rssMB": 2105
+        },
+        "fork": {
+          "impl": "fork",
+          "scenario": "tables/rows-cells-access",
+          "native": true,
+          "warmup": 3,
+          "times": [
+            90.400375,
+            96.102625,
+            94.460792,
+            98.735959,
+            105.785208,
+            105.23625,
+            115.729917,
+            116.057708,
+            120.475125,
+            122.772792
+          ],
+          "median": 105.510729,
+          "min": 90.400375,
+          "max": 122.772792,
+          "mean": 106.57567510000001,
+          "rssMB": 2135
+        }
+      },
+      "speedups": {
+        "fork-js": 0.9634070121762762,
+        "fork": 0.967536083463133
+      }
+    },
+    {
+      "scenario": "tables/nth-child-query",
+      "group": "tables",
+      "desc": "querySelectorAll('td:nth-child(3)'), 'tr.alt > td.c5', 'tbody tr:nth-child(odd) td:last-child'",
+      "results": {
+        "upstream": {
+          "impl": "upstream",
+          "scenario": "tables/nth-child-query",
+          "native": false,
+          "warmup": 3,
+          "times": [
+            164.819,
+            170.637834,
+            175.821542,
+            173.390541,
+            176.351959,
+            163.241542,
+            201.913542,
+            200.852709,
+            194.099375,
+            200.00425
+          ],
+          "median": 176.0867505,
+          "min": 163.241542,
+          "max": 201.913542,
+          "mean": 182.1132294,
+          "rssMB": 2538
+        },
+        "fork-js": {
+          "impl": "fork-js",
+          "scenario": "tables/nth-child-query",
+          "native": false,
+          "warmup": 3,
+          "times": [
+            157.652292,
+            159.372,
+            170.379083,
+            179.662875,
+            181.983041,
+            195.444875,
+            189.910042,
+            195.396875,
+            205.689958,
+            214.792042
+          ],
+          "median": 185.9465415,
+          "min": 157.652292,
+          "max": 214.792042,
+          "mean": 185.0283083,
+          "rssMB": 2531
+        },
+        "fork": {
+          "impl": "fork",
+          "scenario": "tables/nth-child-query",
+          "native": true,
+          "warmup": 3,
+          "times": [
+            165.343792,
+            165.206167,
+            170.145,
+            176.417417,
+            191.122042,
+            169.15,
+            190.227,
+            203.685416,
+            218.809542,
+            224.124166
+          ],
+          "median": 183.3222085,
+          "min": 165.206167,
+          "max": 224.124166,
+          "mean": 187.42305420000002,
+          "rssMB": 2533
+        }
+      },
+      "speedups": {
+        "fork-js": 0.9469751310217297,
+        "fork": 0.960531470468293
+      }
+    },
+    {
+      "scenario": "tables/sort-rows",
+      "group": "tables",
+      "desc": "sort rows by numeric column 3 by re-appending tr nodes (asc then desc)",
+      "results": {
+        "upstream": {
+          "impl": "upstream",
+          "scenario": "tables/sort-rows",
+          "native": false,
+          "warmup": 3,
+          "times": [
+            131.216917,
+            137.694625,
+            140.879333,
+            149.227708,
+            152.449208,
+            155.189209,
+            163.768333,
+            164.977333,
+            165.557292,
+            173.270125
+          ],
+          "median": 153.8192085,
+          "min": 131.216917,
+          "max": 173.270125,
+          "mean": 153.42300830000002,
+          "rssMB": 2156
+        },
+        "fork-js": {
+          "impl": "fork-js",
+          "scenario": "tables/sort-rows",
+          "native": false,
+          "warmup": 3,
+          "times": [
+            129.810042,
+            137.1685,
+            141.237583,
+            150.155708,
+            149.578541,
+            157.802833,
+            164.397875,
+            193.59225,
+            173.893417,
+            180.55975
+          ],
+          "median": 153.97927049999998,
+          "min": 129.810042,
+          "max": 193.59225,
+          "mean": 157.81964989999997,
+          "rssMB": 2155
+        },
+        "fork": {
+          "impl": "fork",
+          "scenario": "tables/sort-rows",
+          "native": true,
+          "warmup": 3,
+          "times": [
+            130.564875,
+            137.887167,
+            149.302,
+            167.683834,
+            167.520416,
+            170.595917,
+            175.712834,
+            173.572333,
+            178.238125,
+            201.37425
+          ],
+          "median": 169.1398755,
+          "min": 130.564875,
+          "max": 201.37425,
+          "mean": 165.24517510000004,
+          "rssMB": 2129
+        }
+      },
+      "speedups": {
+        "fork-js": 0.9989604964390322,
+        "fork": 0.9094201355256408
+      }
+    },
+    {
+      "scenario": "tables/serialize",
+      "group": "tables",
+      "desc": "table.outerHTML (x4)",
+      "results": {
+        "upstream": {
+          "impl": "upstream",
+          "scenario": "tables/serialize",
+          "native": false,
+          "warmup": 3,
+          "times": [
+            106.288375,
+            100.6865,
+            104.509208,
+            134.635417,
+            108.027333,
+            116.646875,
+            155.408042,
+            124.216959,
+            127.348208,
+            166.569667
+          ],
+          "median": 120.431917,
+          "min": 100.6865,
+          "max": 166.569667,
+          "mean": 124.43365839999998,
+          "rssMB": 2106
+        },
+        "fork-js": {
+          "impl": "fork-js",
+          "scenario": "tables/serialize",
+          "native": false,
+          "warmup": 3,
+          "times": [
+            102.333958,
+            100.551125,
+            103.517833,
+            132.9725,
+            112.242292,
+            114.711916,
+            152.852667,
+            128.283542,
+            132.186125,
+            169.052208
+          ],
+          "median": 121.497729,
+          "min": 100.551125,
+          "max": 169.052208,
+          "mean": 124.8704166,
+          "rssMB": 2081
+        },
+        "fork": {
+          "impl": "fork",
+          "scenario": "tables/serialize",
+          "native": true,
+          "warmup": 3,
+          "times": [
+            109.791917,
+            106.386416,
+            105.219833,
+            143.67975,
+            126.437,
+            125.722708,
+            157.107333,
+            132.063375,
+            133.463709,
+            171.01875
+          ],
+          "median": 129.2501875,
+          "min": 105.219833,
+          "max": 171.01875,
+          "mean": 131.0890791,
+          "rssMB": 2081
+        }
+      },
+      "speedups": {
+        "fork-js": 0.9912277208078514,
+        "fork": 0.9317736347577832
+      }
+    },
+    {
+      "scenario": "selectors/complex-qsa",
+      "group": "selectors",
+      "desc": "14 complex selectors via document.querySelectorAll on ~8k-element tree (x2)",
+      "results": {
+        "upstream": {
+          "impl": "upstream",
+          "scenario": "selectors/complex-qsa",
+          "native": false,
+          "warmup": 3,
+          "times": [
+            89.892417,
+            90.474875,
+            88.402792,
+            91.034875,
+            88.176417,
+            90.22075,
+            89.496333,
+            95.261541,
+            96.438417,
+            93.662458
+          ],
+          "median": 90.3478125,
+          "min": 88.176417,
+          "max": 96.438417,
+          "mean": 91.3060875,
+          "rssMB": 507
+        },
+        "fork-js": {
+          "impl": "fork-js",
+          "scenario": "selectors/complex-qsa",
+          "native": false,
+          "warmup": 3,
+          "times": [
+            91.609417,
+            89.334375,
+            87.748375,
+            88.173875,
+            92.915834,
+            95.34375,
+            94.7905,
+            93.851666,
+            96.508292,
+            103.306666
+          ],
+          "median": 93.38374999999999,
+          "min": 87.748375,
+          "max": 103.306666,
+          "mean": 93.358275,
+          "rssMB": 506
+        },
+        "fork": {
+          "impl": "fork",
+          "scenario": "selectors/complex-qsa",
+          "native": true,
+          "warmup": 3,
+          "times": [
+            90.886708,
+            91.02325,
+            89.692792,
+            92.312875,
+            88.652959,
+            93.500417,
+            95.872292,
+            95.961459,
+            94.927042,
+            97.047958
+          ],
+          "median": 92.906646,
+          "min": 88.652959,
+          "max": 97.047958,
+          "mean": 92.98777520000002,
+          "rssMB": 507
+        }
+      },
+      "speedups": {
+        "fork-js": 0.9674896596035178,
+        "fork": 0.972458014467555
+      }
+    },
+    {
+      "scenario": "selectors/querySelector-many",
+      "group": "selectors",
+      "desc": "2000 querySelector calls (attr/id/class lookups) + scoped element.querySelector",
+      "results": {
+        "upstream": {
+          "impl": "upstream",
+          "scenario": "selectors/querySelector-many",
+          "native": false,
+          "warmup": 3,
+          "times": [
+            916.413708,
+            913.390375,
+            963.887958,
+            975.878792,
+            962.940166,
+            927.192833,
+            1034.269875,
+            1020.117292,
+            1088.099208,
+            1004.941
+          ],
+          "median": 969.883375,
+          "min": 913.390375,
+          "max": 1088.099208,
+          "mean": 980.7131207,
+          "rssMB": 538
+        },
+        "fork-js": {
+          "impl": "fork-js",
+          "scenario": "selectors/querySelector-many",
+          "native": false,
+          "warmup": 3,
+          "times": [
+            918.698584,
+            1024.477459,
+            977.558709,
+            964.118959,
+            947.17825,
+            937.947916,
+            949.527208,
+            1019.999083,
+            955.994458,
+            960.686
+          ],
+          "median": 958.340229,
+          "min": 918.698584,
+          "max": 1024.477459,
+          "mean": 965.6186625999999,
+          "rssMB": 538
+        },
+        "fork": {
+          "impl": "fork",
+          "scenario": "selectors/querySelector-many",
+          "native": true,
+          "warmup": 3,
+          "times": [
+            919.117167,
+            927.914375,
+            937.52925,
+            925.015,
+            920.693,
+            912.578125,
+            938.64825,
+            917.715375,
+            922.369333,
+            946.046791
+          ],
+          "median": 923.6921665,
+          "min": 912.578125,
+          "max": 946.046791,
+          "mean": 926.7626666,
+          "rssMB": 538
+        }
+      },
+      "speedups": {
+        "fork-js": 1.0120449352439738,
+        "fork": 1.0500071454270583
+      }
+    },
+    {
+      "scenario": "selectors/live-collections",
+      "group": "selectors",
+      "desc": "getElementsByClassName/TagName iteration interleaved with DOM mutations (cache invalidation)",
+      "results": {
+        "upstream": {
+          "impl": "upstream",
+          "scenario": "selectors/live-collections",
+          "native": false,
+          "warmup": 3,
+          "times": [
+            69.5225,
+            73.666875,
+            73.135958,
+            77.901583,
+            77.237625,
+            81.354791,
+            76.81025,
+            77.922,
+            81.610959,
+            83.416334
+          ],
+          "median": 77.569604,
+          "min": 69.5225,
+          "max": 83.416334,
+          "mean": 77.25788750000001,
+          "rssMB": 508
+        },
+        "fork-js": {
+          "impl": "fork-js",
+          "scenario": "selectors/live-collections",
+          "native": false,
+          "warmup": 3,
+          "times": [
+            77.46175,
+            78.169,
+            78.768375,
+            81.001833,
+            103.27775,
+            81.932542,
+            83.474667,
+            85.344834,
+            86.928708,
+            84.391125
+          ],
+          "median": 82.7036045,
+          "min": 77.46175,
+          "max": 103.27775,
+          "mean": 84.07505839999999,
+          "rssMB": 508
+        },
+        "fork": {
+          "impl": "fork",
+          "scenario": "selectors/live-collections",
+          "native": true,
+          "warmup": 3,
+          "times": [
+            75.101167,
+            75.897416,
+            76.434083,
+            76.690291,
+            72.779041,
+            76.42125,
+            76.876541,
+            81.354709,
+            80.505875,
+            77.488542
+          ],
+          "median": 76.562187,
+          "min": 72.779041,
+          "max": 81.354709,
+          "mean": 76.9548915,
+          "rssMB": 508
+        }
+      },
+      "speedups": {
+        "fork-js": 0.9379228930705191,
+        "fork": 1.013158153384516
+      }
+    },
+    {
+      "scenario": "selectors/matches-closest",
+      "group": "selectors",
+      "desc": "matches() + closest() for every li/a/button element (event-delegation style)",
+      "results": {
+        "upstream": {
+          "impl": "upstream",
+          "scenario": "selectors/matches-closest",
+          "native": false,
+          "warmup": 3,
+          "times": [
+            73.763791,
+            74.90525,
+            68.260041,
+            72.506166,
+            77.962459,
+            78.06325,
+            74.776584,
+            78.819042,
+            76.355875,
+            77.681916
+          ],
+          "median": 75.6305625,
+          "min": 68.260041,
+          "max": 78.819042,
+          "mean": 75.3094374,
+          "rssMB": 511
+        },
+        "fork-js": {
+          "impl": "fork-js",
+          "scenario": "selectors/matches-closest",
+          "native": false,
+          "warmup": 3,
+          "times": [
+            75.895542,
+            73.04975,
+            69.88525,
+            71.704166,
+            75.633125,
+            73.881458,
+            73.763875,
+            81.400375,
+            76.509625,
+            77.111667
+          ],
+          "median": 74.75729150000001,
+          "min": 69.88525,
+          "max": 81.400375,
+          "mean": 74.88348330000001,
+          "rssMB": 511
+        },
+        "fork": {
+          "impl": "fork",
+          "scenario": "selectors/matches-closest",
+          "native": true,
+          "warmup": 3,
+          "times": [
+            75.504959,
+            76.107666,
+            71.162958,
+            73.760125,
+            73.847083,
+            74.182083,
+            75.837667,
+            78.25625,
+            76.809791,
+            73.475792
+          ],
+          "median": 74.84352100000001,
+          "min": 71.162958,
+          "max": 78.25625,
+          "mean": 74.8944374,
+          "rssMB": 511
+        }
+      },
+      "speedups": {
+        "fork-js": 1.011681415718492,
+        "fork": 1.0105158267473813
+      }
+    },
+    {
+      "scenario": "events/bubble-deep",
+      "group": "events",
+      "desc": "dispatch 4000 bubbling click events through a 40-deep tree with capture+bubble listeners on every level",
+      "results": {
+        "upstream": {
+          "impl": "upstream",
+          "scenario": "events/bubble-deep",
+          "native": false,
+          "warmup": 3,
+          "times": [
+            82.300709,
+            80.524292,
+            82.187417,
+            79.25925,
+            81.951208,
+            80.320583,
+            81.668667,
+            81.14425,
+            82.157208,
+            80.583125
+          ],
+          "median": 81.4064585,
+          "min": 79.25925,
+          "max": 82.300709,
+          "mean": 81.20967089999999,
+          "rssMB": 197
+        },
+        "fork-js": {
+          "impl": "fork-js",
+          "scenario": "events/bubble-deep",
+          "native": false,
+          "warmup": 3,
+          "times": [
+            83.752709,
+            82.342167,
+            81.088833,
+            82.291541,
+            82.662542,
+            82.671,
+            81.945375,
+            80.979625,
+            82.969334,
+            82.61825
+          ],
+          "median": 82.4802085,
+          "min": 80.979625,
+          "max": 83.752709,
+          "mean": 82.3321376,
+          "rssMB": 196
+        },
+        "fork": {
+          "impl": "fork",
+          "scenario": "events/bubble-deep",
+          "native": true,
+          "warmup": 3,
+          "times": [
+            91.538958,
+            84.172792,
+            86.124042,
+            83.819292,
+            83.959209,
+            84.492916,
+            84.470333,
+            84.32375,
+            84.750709,
+            83.678875
+          ],
+          "median": 84.3970415,
+          "min": 83.678875,
+          "max": 91.538958,
+          "mean": 85.1330876,
+          "rssMB": 197
+        }
+      },
+      "speedups": {
+        "fork-js": 0.9869817254402309,
+        "fork": 0.964565310029262
+      }
+    },
+    {
+      "scenario": "events/many-targets-delegation",
+      "group": "events",
+      "desc": "React-style root delegation: 750 elements each get click() + focus(), root listener inspects target",
+      "results": {
+        "upstream": {
+          "impl": "upstream",
+          "scenario": "events/many-targets-delegation",
+          "native": false,
+          "warmup": 3,
+          "times": [
+            953.447583,
+            972.175792,
+            977.865833,
+            965.127083,
+            956.795209,
+            972.957833,
+            954.201,
+            976.216,
+            977.86425,
+            973.143458
+          ],
+          "median": 972.5668125,
+          "min": 953.447583,
+          "max": 977.865833,
+          "mean": 967.9794041000001,
+          "rssMB": 331
+        },
+        "fork-js": {
+          "impl": "fork-js",
+          "scenario": "events/many-targets-delegation",
+          "native": false,
+          "warmup": 3,
+          "times": [
+            959.66875,
+            961.254875,
+            950.429042,
+            947.03525,
+            962.003209,
+            952.578541,
+            942.3735,
+            946.362375,
+            939.150958,
+            956.209958
+          ],
+          "median": 951.5037915,
+          "min": 939.150958,
+          "max": 962.003209,
+          "mean": 951.7066457999999,
+          "rssMB": 331
+        },
+        "fork": {
+          "impl": "fork",
+          "scenario": "events/many-targets-delegation",
+          "native": true,
+          "warmup": 3,
+          "times": [
+            1262.375042,
+            2274.724709,
+            1396.184542,
+            1344.730541,
+            1316.813208,
+            1008.091333,
+            931.130792,
+            919.705,
+            925.264208,
+            948.946625
+          ],
+          "median": 1135.2331875,
+          "min": 919.705,
+          "max": 2274.724709,
+          "mean": 1232.7966000000001,
+          "rssMB": 314
+        }
+      },
+      "speedups": {
+        "fork-js": 1.0221365602409163,
+        "fork": 0.856711046865867
+      }
+    },
+    {
+      "scenario": "style/inline-set",
+      "group": "style",
+      "desc": "React-style inline style writes: 3000 elements x 10 properties (style.x=, setProperty, cssText read)",
+      "results": {
+        "upstream": {
+          "impl": "upstream",
+          "scenario": "style/inline-set",
+          "native": false,
+          "warmup": 3,
+          "times": [
+            96.753416,
+            94.954708,
+            94.236209,
+            98.604458,
+            98.775625,
+            98.376834,
+            104.978209,
+            104.586625,
+            102.826792,
+            104.919083
+          ],
+          "median": 98.6900415,
+          "min": 94.236209,
+          "max": 104.978209,
+          "mean": 99.9011959,
+          "rssMB": 473
+        },
+        "fork-js": {
+          "impl": "fork-js",
+          "scenario": "style/inline-set",
+          "native": false,
+          "warmup": 3,
+          "times": [
+            98.46325,
+            96.988208,
+            98.020667,
+            98.084708,
+            100.132333,
+            99.940417,
+            101.642542,
+            102.268667,
+            102.856583,
+            98.19325
+          ],
+          "median": 99.20183349999999,
+          "min": 96.988208,
+          "max": 102.856583,
+          "mean": 99.6590625,
+          "rssMB": 473
+        },
+        "fork": {
+          "impl": "fork",
+          "scenario": "style/inline-set",
+          "native": true,
+          "warmup": 3,
+          "times": [
+            94.420875,
+            94.840916,
+            96.987041,
+            94.737583,
+            98.130542,
+            97.86725,
+            97.780333,
+            97.706209,
+            101.18125,
+            100.889334
+          ],
+          "median": 97.743271,
+          "min": 94.420875,
+          "max": 101.18125,
+          "mean": 97.4541333,
+          "rssMB": 473
+        }
+      },
+      "speedups": {
+        "fork-js": 0.9948409018065176,
+        "fork": 1.0096862985074442
+      }
+    },
+    {
+      "scenario": "style/computed-style",
+      "group": "style",
+      "desc": "getComputedStyle on 1500 elements with a 200-rule stylesheet, reading 6 properties each",
+      "results": {
+        "upstream": {
+          "impl": "upstream",
+          "scenario": "style/computed-style",
+          "native": false,
+          "warmup": 3,
+          "times": [
+            1308.111875,
+            1301.298417,
+            1294.491917,
+            1293.450916,
+            1319.922792,
+            1307.885083,
+            1310.209709,
+            1298.710125,
+            1305.394667,
+            1300.203792
+          ],
+          "median": 1303.346542,
+          "min": 1293.450916,
+          "max": 1319.922792,
+          "mean": 1303.9679293000002,
+          "rssMB": 556
+        },
+        "fork-js": {
+          "impl": "fork-js",
+          "scenario": "style/computed-style",
+          "native": false,
+          "warmup": 3,
+          "times": [
+            1307.240958,
+            1309.809083,
+            1291.23075,
+            1305.544916,
+            1377.808334,
+            1367.9785,
+            1345.287291,
+            1456.909542,
+            1714.659375,
+            1393.026333
+          ],
+          "median": 1356.6328955,
+          "min": 1291.23075,
+          "max": 1714.659375,
+          "mean": 1386.9495081999999,
+          "rssMB": 553
+        },
+        "fork": {
+          "impl": "fork",
+          "scenario": "style/computed-style",
+          "native": true,
+          "warmup": 3,
+          "times": [
+            1353.467959,
+            1372.583083,
+            1589.561833,
+            1397.79525,
+            1338.562375,
+            1318.751334,
+            1428.910417,
+            1366.029542,
+            1377.97575,
+            1363.895
+          ],
+          "median": 1369.3063124999999,
+          "min": 1318.751334,
+          "max": 1589.561833,
+          "mean": 1390.7532543,
+          "rssMB": 557
+        }
+      },
+      "speedups": {
+        "fork-js": 0.9607216118105697,
+        "fork": 0.9518297915536704
+      }
+    },
+    {
+      "scenario": "react/render-dashboard",
+      "group": "react",
+      "desc": "createRoot + act(render) of a ~3k-element dashboard (header/nav, sidebar, stat cards, 250-row table, form, feed)",
+      "results": {
+        "upstream": {
+          "impl": "upstream",
+          "scenario": "react/render-dashboard",
+          "native": false,
+          "warmup": 3,
+          "times": [
+            44.49925,
+            51.213791,
+            47.027792,
+            49.174,
+            46.216166,
+            82.951375,
+            81.024542,
+            55.358167,
+            49.864708,
+            47.112917
+          ],
+          "median": 49.519354,
+          "min": 44.49925,
+          "max": 82.951375,
+          "mean": 55.444270800000005,
+          "rssMB": 250
+        },
+        "fork-js": {
+          "impl": "fork-js",
+          "scenario": "react/render-dashboard",
+          "native": false,
+          "warmup": 3,
+          "times": [
+            46.57675,
+            49.95075,
+            47.573375,
+            50.0655,
+            50.522625,
+            88.63725,
+            85.328333,
+            55.912666,
+            52.010458,
+            47.033917
+          ],
+          "median": 50.294062499999995,
+          "min": 46.57675,
+          "max": 88.63725,
+          "mean": 57.3611624,
+          "rssMB": 250
+        },
+        "fork": {
+          "impl": "fork",
+          "scenario": "react/render-dashboard",
+          "native": true,
+          "warmup": 3,
+          "times": [
+            51.111208,
+            51.811709,
+            51.727709,
+            54.286125,
+            52.894125,
+            51.9465,
+            52.726125,
+            81.4215,
+            85.607542,
+            57.204375
+          ],
+          "median": 52.810125,
+          "min": 51.111208,
+          "max": 85.607542,
+          "mean": 59.073691800000006,
+          "rssMB": 248
+        }
+      },
+      "speedups": {
+        "fork-js": 0.9845964222913988,
+        "fork": 0.9376867409421962
+      }
+    },
+    {
+      "scenario": "react/updates",
+      "group": "react",
+      "desc": "~50 state updates on the rendered dashboard: sort, filter, theme toggle, row selection, show/hide feed",
+      "results": {
+        "upstream": {
+          "impl": "upstream",
+          "scenario": "react/updates",
+          "native": false,
+          "warmup": 3,
+          "times": [
+            189.746542,
+            183.147416,
+            180.923417,
+            217.079,
+            179.871916,
+            177.321625,
+            213.42475,
+            181.499625,
+            180.57775,
+            176.265333
+          ],
+          "median": 181.211521,
+          "min": 176.265333,
+          "max": 217.079,
+          "mean": 187.9857374,
+          "rssMB": 332
+        },
+        "fork-js": {
+          "impl": "fork-js",
+          "scenario": "react/updates",
+          "native": false,
+          "warmup": 3,
+          "times": [
+            189.460209,
+            193.913,
+            186.191291,
+            232.525875,
+            182.6205,
+            179.652958,
+            177.665625,
+            236.1625,
+            176.64725,
+            187.437292
+          ],
+          "median": 186.81429150000002,
+          "min": 176.64725,
+          "max": 236.1625,
+          "mean": 194.22764999999998,
+          "rssMB": 330
+        },
+        "fork": {
+          "impl": "fork",
+          "scenario": "react/updates",
+          "native": true,
+          "warmup": 3,
+          "times": [
+            180.76425,
+            182.457541,
+            177.857834,
+            236.969041,
+            179.194583,
+            178.237708,
+            178.318333,
+            242.731,
+            190.643875,
+            194.742666
+          ],
+          "median": 181.6108955,
+          "min": 177.857834,
+          "max": 242.731,
+          "mean": 194.19168309999998,
+          "rssMB": 334
+        }
+      },
+      "speedups": {
+        "fork-js": 0.9700088764354519,
+        "fork": 0.9978009331494101
+      }
+    },
+    {
+      "scenario": "react/unmount",
+      "group": "react",
+      "desc": "act(root.unmount()) of 8 rendered dashboards (~33k elements total)",
+      "results": {
+        "upstream": {
+          "impl": "upstream",
+          "scenario": "react/unmount",
+          "native": false,
+          "warmup": 3,
+          "times": [
+            49.975709,
+            45.791084,
+            44.825917,
+            44.405417,
+            46.2685,
+            45.86075,
+            56.95025,
+            50.1095,
+            54.11025,
+            50.809541
+          ],
+          "median": 48.122104500000006,
+          "min": 44.405417,
+          "max": 56.95025,
+          "mean": 48.91069180000001,
+          "rssMB": 506
+        },
+        "fork-js": {
+          "impl": "fork-js",
+          "scenario": "react/unmount",
+          "native": false,
+          "warmup": 3,
+          "times": [
+            46.962667,
+            46.619291,
+            45.727458,
+            48.681958,
+            45.514875,
+            66.047292,
+            62.67075,
+            194.85625,
+            298.714583,
+            564.888458
+          ],
+          "median": 55.676354,
+          "min": 45.514875,
+          "max": 564.888458,
+          "mean": 142.0683582,
+          "rssMB": 440
+        },
+        "fork": {
+          "impl": "fork",
+          "scenario": "react/unmount",
+          "native": true,
+          "warmup": 3,
+          "times": [
+            472.134,
+            362.558708,
+            243.256083,
+            741.731875,
+            439.356958
+          ],
+          "median": 439.356958,
+          "min": 243.256083,
+          "max": 741.731875,
+          "mean": 451.8075248,
+          "rssMB": 417
+        }
+      },
+      "speedups": {
+        "fork-js": 0.8643185309871405,
+        "fork": 0.10952849072666787
+      }
+    },
+    {
+      "scenario": "react/testing-library-form",
+      "group": "react",
+      "desc": "@testing-library/react: render form+todo app, getByRole/getByText/getAllByRole queries, fireEvent typing + clicks",
+      "results": {
+        "upstream": {
+          "impl": "upstream",
+          "scenario": "react/testing-library-form",
+          "native": false,
+          "warmup": 3,
+          "times": [
+            1298.569542,
+            1891.149291,
+            1089.315042,
+            1105.648666,
+            1737.898083,
+            1147.190208,
+            994.881792,
+            766.684542,
+            627.362417,
+            702.628708
+          ],
+          "median": 1097.481854,
+          "min": 627.362417,
+          "max": 1891.149291,
+          "mean": 1136.1328291000002,
+          "rssMB": 281
+        },
+        "fork-js": {
+          "impl": "fork-js",
+          "scenario": "react/testing-library-form",
+          "native": false,
+          "warmup": 3,
+          "times": [
+            534.499958,
+            521.7145,
+            693.668458,
+            540.552708,
+            553.67125,
+            609.773208,
+            543.873709,
+            665.115209,
+            484.419625,
+            481.545625
+          ],
+          "median": 542.2132085000001,
+          "min": 481.545625,
+          "max": 693.668458,
+          "mean": 562.8834250000001,
+          "rssMB": 290
+        },
+        "fork": {
+          "impl": "fork",
+          "scenario": "react/testing-library-form",
+          "native": true,
+          "warmup": 3,
+          "times": [
+            459.083458,
+            585.730375,
+            443.895083,
+            533.493583,
+            450.913542,
+            503.719583,
+            419.707416,
+            560.660958,
+            620.9675,
+            675.549458
+          ],
+          "median": 518.606583,
+          "min": 419.707416,
+          "max": 675.549458,
+          "mean": 525.3720956000001,
+          "rssMB": 305
+        }
+      },
+      "speedups": {
+        "fork-js": 2.024078050470436,
+        "fork": 2.116212732301549
+      }
+    }
+  ]
+}
