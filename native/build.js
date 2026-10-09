@@ -12,7 +12,7 @@ if (profile === "release") {
 execFileSync("cargo", args, { stdio: "inherit" });
 
 const targetDir = process.env.CARGO_TARGET_DIR || path.join(__dirname, "target");
-const ext = process.platform === "darwin" ? "dylib" : process.platform === "win32" ? "dll" : "so";
+const ext = { darwin: "dylib", win32: "dll" }[process.platform] ?? "so";
 const prefix = process.platform === "win32" ? "" : "lib";
 const built = path.join(targetDir, profile, `${prefix}jsdom_native.${ext}`);
 fs.copyFileSync(built, path.join(__dirname, "jsdom-native.node"));
