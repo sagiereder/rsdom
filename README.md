@@ -109,11 +109,13 @@ The upstream npm scripts (`npm run test:api`, `test:wpt`, `test:tuwpt`, `test:to
 
 ## Running benchmarks
 
-The benchmarks in `bench/` compare rsdom with the published jsdom 30.1.2. Each implementation and scenario runs in a fresh process.
+The benchmarks in `bench/` compare rsdom with the published jsdom 30.1.2 and [happy-dom](https://github.com/capricorn86/happy-dom). Each implementation and scenario runs in a fresh process. The scenarios cover simple divs and lists, large documents, huge tables, selectors, events, styles, and React apps (a dashboard and a complex multi-page app with forms, tables and modals, in development and production builds, plus Testing Library).
 
 ```sh
 cd bench && npm install
 node run.js                         # upstream jsdom vs rsdom, writes results/<timestamp>.json
+node run.js --impls upstream,fork-js,fork,happy-dom --stat min   # the run behind the table below
+node run.js --mode happy            # happy-dom vs rsdom
 node run.js --quick --filter selectors
 node run.js --mode native           # rsdom with JSDOM_NATIVE=0 vs rsdom
 node report.js                      # rewrite the table below from the newest results file
@@ -121,42 +123,51 @@ node report.js                      # rewrite the table below from the newest re
 
 ## Benchmark results
 
-<!-- BENCH:START -->
-Measured 2026-10-09 on Apple M4 (darwin arm64), Node.js v24.21.0, rsdom at `7c7360c8`. Each number is the median of 10 timed iterations after 3 warmups, every scenario in a fresh process; speedup = jsdom 30.1.2 time / rsdom time.
+Across all scenarios rsdom is **4.9x faster than jsdom** and **4.7x faster than happy-dom** (geometric mean), with the biggest gains on selectors, computed styles and event delegation, and 1.3–3.7x over jsdom on React apps. happy-dom is faster than jsdom in some scenarios but slower in most. Where it reads N/A, or is marked in the notes below, happy-dom lacks the API or returns different results, so its time isn't comparable.
 
-| Area | Scenario | jsdom 30.1.2 (ms) | rsdom (ms) | Speedup |
-|---|---|--:|--:|--:|
-| **Simple divs and lists** | `divs/create-dom-api` | 85.1 | 49.4 | 1.72x |
-|  | `divs/innerHTML` | 306 | 111 | 2.75x |
-|  | `lists/create-dom-api` | 81.7 | 45.2 | 1.81x |
-|  | `lists/innerHTML` | 162 | 41.8 | 3.87x |
-|  | `lists/query-iterate-read` | 156 | 112 | 1.40x |
-| **Large documents** | `large/innerHTML-parse` | 510 | 150 | 3.40x |
-|  | `large/jsdom-full-parse` | 392 | 146 | 2.68x |
-|  | `large/serialize-outerHTML` | 114 | 42.2 | 2.71x |
-|  | `large/serialize-dom` | 105 | 38.6 | 2.73x |
-|  | `large/cloneNode-deep` | 391 | 157 | 2.49x |
-| **Tables** | `tables/parse-innerHTML` | 595 | 268 | 2.22x |
-|  | `tables/rows-cells-access` | 147 | 99.5 | 1.48x |
-|  | `tables/nth-child-query` | 225 | 32.8 | 6.87x |
-|  | `tables/sort-rows` | 189 | 109 | 1.74x |
-|  | `tables/serialize` | 140 | 49.1 | 2.85x |
-| **Selectors** | `selectors/complex-qsa` | 114 | 18.3 | 6.24x |
-|  | `selectors/querySelector-many` | 1308 | 112 | 11.7x |
-|  | `selectors/live-collections` | 150 | 19.8 | 7.59x |
-|  | `selectors/matches-closest` | 113 | 6.57 | 17.2x |
-| **Events and style** | `events/bubble-deep` | 458 | 372 | 1.23x |
-|  | `events/many-targets-delegation` | 4841 | 300 | 16.1x |
-|  | `style/inline-set` | 333 | 118 | 2.81x |
-|  | `style/computed-style` | 2533 | 72.5 | 35.0x |
-| **React** | `react/render-dashboard` | 62.1 | 41.3 | 1.50x |
-|  | `react/updates` | 212 | 175 | 1.21x |
-|  | `react/unmount` | 47.5 | 21.8 | 2.18x |
-|  | `react/testing-library-form` | 368 | 112 | 3.29x |
-| | **Geometric mean** | | | **3.39x** |
+<!-- BENCH:START -->
+Measured 2026-10-09 on Apple M4 (darwin arm64), Node.js v24.21.0, rsdom at `a9c33c68`. Each number is the min of 10 timed iterations after 3 warmups, every scenario in a fresh process; a speedup is the other implementation's time / rsdom time (> 1 means rsdom is faster).
+
+| Area | Scenario | jsdom 30.1.2 (ms) | happy-dom (ms) | rsdom (ms) | vs jsdom 30.1.2 | vs happy-dom |
+|---|---|--:|--:|--:|--:|--:|
+| **Simple divs and lists** | `divs/create-dom-api` | 57.4 | 86.0 | 11.1 | 5.17x | 7.75x |
+|  | `divs/innerHTML` | 160 | 137 | 30.4 | 5.27x | 4.50x |
+|  | `lists/create-dom-api` | 45.2 | 65.0 | 11.8 | 3.84x | 5.52x |
+|  | `lists/innerHTML` | 86.0 | 55.1 | 11.4 | 7.53x | 4.82x |
+|  | `lists/query-iterate-read` | 90.7 | 112 | 35.6 | 2.55x | 3.15x |
+| **Large documents** | `large/innerHTML-parse` | 293 | 219 | 43.4 | 6.76x | 5.05x |
+|  | `large/jsdom-full-parse` | 219 | 231 | 45.7 | 4.80x | 5.05x |
+|  | `large/serialize-outerHTML` | 66.7 | 135 | 18.8 | 3.55x | 7.20x |
+|  | `large/serialize-dom` | 59.6 | 137 | 16.4 | 3.64x | 8.36x |
+|  | `large/cloneNode-deep` | 196 | 199 | 27.7 | 7.07x | 7.17x |
+| **Tables** | `tables/parse-innerHTML` | 322 | 264 | 53.3 | 6.04x | 4.94x |
+|  | `tables/rows-cells-access` | 76.1 | 147 | 29.2 | 2.61x | 5.03x |
+|  | `tables/nth-child-query` | 129 | 146 | 17.2 | 7.52x | 8.50x |
+|  | `tables/sort-rows` | 106 | N/A | 27.7 | 3.83x | N/A |
+|  | `tables/serialize` | 78.8 | 173 | 17.4 | 4.53x | 9.97x |
+| **Selectors** | `selectors/complex-qsa` | 66.1 | 37.2 | 7.78 | 8.49x | 4.78x |
+|  | `selectors/querySelector-many` | 832 | 187 | 66.1 | 12.6x | 2.83x |
+|  | `selectors/live-collections` | 61.0 | 205 | 5.65 | 10.8x | 36.2x |
+|  | `selectors/matches-closest` | 58.2 | 14.1 | 3.13 | 18.6x | 4.49x |
+| **Events and style** | `events/bubble-deep` | 69.1 | 76.1 | 32.0 | 2.16x | 2.38x |
+|  | `events/many-targets-delegation` | 908 | 11.4 | 9.82 | 92.4x | 1.16x |
+|  | `style/inline-set` | 84.5 | 254 | 32.5 | 2.60x | 7.82x |
+|  | `style/computed-style` | 1200 | 167 | 44.3 | 27.1x | 3.77x |
+| **React** | `react/render-dashboard` | 39.3 | 58.6 | 19.6 | 2.01x | 3.00x |
+|  | `react/updates` | 145 | 178 | 108 | 1.34x | 1.65x |
+|  | `react/unmount` | 35.6 | 72.8 | 12.1 | 2.95x | 6.02x |
+|  | `react/complex-app` | 731 | 1043 | 457 | 1.60x | 2.28x |
+|  | `react/testing-library-form` | 239 | 105 | 67.3 | 3.55x | 1.56x |
+| **React (production build)** | `react-prod/render-dashboard` | 28.4 | 42.3 | 11.0 | 2.57x | 3.84x |
+|  | `react-prod/updates` | 64.8 | 95.6 | 28.3 | 2.29x | 3.37x |
+|  | `react-prod/unmount` | 33.5 | 68.8 | 8.99 | 3.73x | 7.65x |
+|  | `react-prod/complex-app` | 417 | 695 | 164 | 2.55x | 4.24x |
+|  | **Geometric mean** |  |  |  | **4.86x** | **4.66x** |
 
 Regenerate this table with `node bench/report.js` after a full `node bench/run.js`.
 <!-- BENCH:END -->
+
+Notes on happy-dom 20.14.6: `tables/sort-rows` needs `HTMLTableSectionElement.rows`, which it doesn't implement. In `selectors/complex-qsa` it returns wrong results (`:enabled` matches nothing, and a sibling-combinator query returns duplicates). In `style/computed-style` it does less work (values such as colours and `calc()` are not resolved).
 
 ## Credits and licence
 

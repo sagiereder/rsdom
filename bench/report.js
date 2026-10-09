@@ -19,7 +19,8 @@ const AREAS = [
   ["Tables", ["tables"]],
   ["Selectors", ["selectors"]],
   ["Events and style", ["events", "style"]],
-  ["React", ["react"]]
+  ["React", ["react"]],
+  ["React (production build)", ["react-prod"]]
 ];
 
 function parseArgs(argv) {
@@ -53,36 +54,71 @@ function render(results) {
   const stat = results.stat || "median";
   const base = results.baseline || results.impls[0];
   const impl = results.impls.includes("fork") ? "fork" : results.impls.find(i => i !== base);
-  const label = { upstream: "jsdom 30.1.2", fork: "rsdom", "fork-js": "rsdom (JSDOM_NATIVE=0)" };
+  // happy-dom gets its own time and speedup columns when the run included it.
+  const happy = results.impls.includes("happy-dom") && impl !== "happy-dom" ? "happy-dom" : null;
+  const label = { upstream: "jsdom 30.1.2", fork: "rsdom", "fork-js": "rsdom (JSDOM_NATIVE=0)", "happy-dom": "happy-dom" };
+  const name = i => label[i] || i;
   const date = results.date.slice(0, 10);
   const { warmup, iters } = results.opts || {};
+  const time = (r, i) => {
+    const x = r.results[i];
+    return x && !x.na && !x.error ? x[stat] : null;
+  };
 
   const lines = [
     `Measured ${date} on ${results.cpu} (${results.platform}), Node.js ${results.node}, rsdom at \`${results.gitRev}\`. ` +
     `Each number is the ${stat} of ${iters} timed iterations after ${warmup} warmups, every scenario in a fresh ` +
-    `process; speedup = ${label[base] || base} time / ${label[impl] || impl} time.`,
-    "",
-    `| Area | Scenario | ${label[base] || base} (ms) | ${label[impl] || impl} (ms) | Speedup |`,
-    "|---|---|--:|--:|--:|"
+    `process; a speedup is the other implementation's time / ${name(impl)} time (> 1 means ${name(impl)} is faster).`,
+    ""
   ];
-  const all = [];
+  const cols = ["Area", "Scenario", `${name(base)} (ms)`];
+  if (happy) {
+    cols.push(`${name(happy)} (ms)`);
+  }
+  cols.push(`${name(impl)} (ms)`, `vs ${name(base)}`);
+  if (happy) {
+    cols.push(`vs ${name(happy)}`);
+  }
+  lines.push(`| ${cols.join(" | ")} |`, `|---|---|${"--:|".repeat(cols.length - 2)}`);
+
+  const vsBase = [];
+  const vsHappy = [];
+  const row = (areaCell, r) => {
+    const a = time(r, base);
+    const b = time(r, impl);
+    const h = happy ? time(r, happy) : null;
+    const cells = [areaCell, `\`${r.scenario}\``, a === null ? "N/A" : fmtMs(a)];
+    if (happy) {
+      cells.push(h === null ? "N/A" : fmtMs(h));
+    }
+    cells.push(b === null ? "N/A" : fmtMs(b));
+    if (a !== null && b !== null) {
+      vsBase.push(a / b);
+      cells.push(fmtX(a / b));
+    } else {
+      cells.push("N/A");
+    }
+    if (happy) {
+      if (h !== null && b !== null) {
+        vsHappy.push(h / b);
+        cells.push(fmtX(h / b));
+      } else {
+        cells.push("N/A");
+      }
+    }
+    lines.push(`| ${cells.join(" | ")} |`);
+  };
   for (const [area, groups] of AREAS) {
-    const rows = results.rows.filter(r => groups.includes(r.group));
-    rows.forEach((r, i) => {
-      const a = r.results[base][stat];
-      const b = r.results[impl][stat];
-      all.push(a / b);
-      lines.push(`| ${i === 0 ? `**${area}**` : ""} | \`${r.scenario}\` | ${fmtMs(a)} | ${fmtMs(b)} | ${fmtX(a / b)} |`);
-    });
+    results.rows.filter(r => groups.includes(r.group)).forEach((r, i) => row(i === 0 ? `**${area}**` : "", r));
   }
-  const other = results.rows.filter(r => !AREAS.some(([, g]) => g.includes(r.group)));
-  for (const r of other) {
-    const a = r.results[base][stat];
-    const b = r.results[impl][stat];
-    all.push(a / b);
-    lines.push(`| ${r.group} | \`${r.scenario}\` | ${fmtMs(a)} | ${fmtMs(b)} | ${fmtX(a / b)} |`);
+  for (const r of results.rows.filter(r => !AREAS.some(([, g]) => g.includes(r.group)))) {
+    row(r.group, r);
   }
-  lines.push(`| | **Geometric mean** | | | **${fmtX(geomean(all))}** |`);
+  const mean = ["", "**Geometric mean**", ...Array(cols.length - (happy ? 4 : 3)).fill(""), `**${fmtX(geomean(vsBase))}**`];
+  if (happy) {
+    mean.push(`**${fmtX(geomean(vsHappy))}**`);
+  }
+  lines.push(`| ${mean.join(" | ")} |`);
   lines.push("", "Regenerate this table with `node bench/report.js` after a full `node bench/run.js`.");
   return lines.join("\n");
 }
