@@ -109,7 +109,9 @@ function selectDirs(prefixes, dirs) {
 function shard(dirs, n) {
   const bins = Array.from({ length: n }, () => ({ weight: 0, dirs: [] }));
   for (const d of [...dirs].sort((a, b) => b.weight - a.weight)) {
-    const bin = bins.reduce((a, b) => a.weight <= b.weight ? a : b);
+    const bin = bins.reduce((a, b) => {
+      return a.weight <= b.weight ? a : b;
+    });
     bin.weight += d.weight;
     bin.dirs.push(d.dir);
   }
