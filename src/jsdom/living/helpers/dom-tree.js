@@ -11,7 +11,11 @@ const NODE_DOCUMENT_POSITION = require("../node-document-position");
 // Insertion callers provide detached children. Mutations here only change links:
 // NodeImpl handles validation, adoption, ranges, observers, slots, and reactions.
 class Links {
+  // The node these links belong to.
+  node = null;
   parent = null;
+  // The parent's links, so that ancestor walks can read only links objects.
+  parentLinks = null;
   previousSibling = null;
   nextSibling = null;
   firstChild = null;
@@ -21,6 +25,30 @@ class Links {
   // array: a lazily indexed prefix of the children.
   cachedChildren = null;
   cachedIndex = -1;
+  // LINK_* bits describing the node, so that subtree walks can skip most nodes after reading only this object (the
+  // node objects come in many shapes, which makes reading their own properties slow in such walks).
+  flags = 0;
+}
+
+// The node is an element.
+const LINK_ELEMENT = 1;
+// The node's class has insertion, post-connection or non-default removing steps.
+const LINK_STEPS = 2;
+// The element's custom element state was not "uncustomized" when its links were allocated. An uncustomized element
+// stays that way, so only elements with this bit can be or become custom, or be upgraded.
+const LINK_CUSTOM_ELEMENT = 4;
+// The element had an id or name attribute (in no namespace) at some point after its links were allocated, or when
+// they were. It might not have one any more.
+const LINK_ID_OR_NAME = 8;
+// Something caches state derived from the node's subtree or attributes and checks the node's `_version` before using
+// it (live collections, memoized queries, ...), or the node has memoized queries or child lists to invalidate. Only
+// nodes with this bit need their version bumped on mutations; see `NodeImpl._invalidateCaches()`.
+const LINK_VERSION_OBSERVED = 16;
+
+// Set by NodeImpl: returns the initial flags for a node.
+let computeLinkFlags = null;
+function setLinkFlagsComputer(fn) {
+  computeLinkFlags = fn;
 }
 
 function ensureLinks(node) {
@@ -28,8 +56,16 @@ function ensureLinks(node) {
   if (data) {
     return data;
   }
-  node._links = new Links();
-  return node._links;
+  const links = new Links();
+  links.node = node;
+  links.flags = computeLinkFlags(node);
+  node._links = links;
+  return links;
+}
+
+// Call before caching anything that is checked against `node._version` or kept in `node._memoizedQueries`.
+function observeVersion(node) {
+  ensureLinks(node).flags |= LINK_VERSION_OBSERVED;
 }
 
 function lastInclusiveDescendant(node) {
@@ -289,6 +325,7 @@ function appendChild(node, child) {
   const data = ensureLinks(node);
   const childData = ensureLinks(child);
   childData.parent = node;
+  childData.parentLinks = data;
   childData.previousSibling = data.lastChild;
   if (data.lastChild) {
     data.lastChild._links.nextSibling = child;
@@ -306,6 +343,7 @@ function insertBefore(reference, child) {
   const data = referenceData.parent._links;
   const childData = ensureLinks(child);
   childData.parent = referenceData.parent;
+  childData.parentLinks = data;
   childData.previousSibling = referenceData.previousSibling;
   childData.nextSibling = reference;
   if (referenceData.previousSibling) {
@@ -351,6 +389,7 @@ function remove(node) {
   }
   --parentData.childCount;
   data.parent = null;
+  data.parentLinks = null;
   data.previousSibling = null;
   data.nextSibling = null;
   data.cachedIndex = -1;
@@ -358,6 +397,8 @@ function remove(node) {
 }
 
 module.exports = {
+  LINK_ELEMENT, LINK_STEPS, LINK_CUSTOM_ELEMENT, LINK_ID_OR_NAME, LINK_VERSION_OBSERVED,
+  setLinkFlagsComputer, ensureLinks, observeVersion,
   ChildrenIterator, DescendantsIterator, ShadowIncludingIterator,
   childrenToArray, descendantsToArray,
   nextInTree, nextAfterSubtree, previousInTree, lastInclusiveDescendant,

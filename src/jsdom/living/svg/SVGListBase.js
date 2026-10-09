@@ -3,6 +3,7 @@
 const DOMException = require("../../../generated/idl/DOMException");
 const idlUtils = require("../../../generated/idl/utils");
 const { attach, detach } = require("../helpers/svg/basic-types");
+const { observeVersion } = require("../helpers/dom-tree");
 
 // https://svgwg.org/svg2-draft/types.html#ListInterfaces
 
@@ -14,6 +15,7 @@ class List {
     readOnly = false
   }) {
     this._element = element;
+    observeVersion(element);
     this._attribute = attribute;
     this._attributeRegistryEntry = element.constructor.attributeRegistry.get(attribute);
     this._readOnly = readOnly;

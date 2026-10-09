@@ -6,6 +6,15 @@ exports.asciiWhitespaceRe = asciiWhitespaceRe;
 
 // https://infra.spec.whatwg.org/#ascii-lowercase
 exports.asciiLowercase = s => {
+  // Most strings (tag and attribute names) already are lowercase, and toLowerCase() copies them anyway.
+  let start = 0;
+  const { length } = s;
+  while (start < length && (s.charCodeAt(start) < 65 || s.charCodeAt(start) > 90)) {
+    start++;
+  }
+  if (start === length) {
+    return s;
+  }
   if (!/[^\x00-\x7f]/.test(s)) {
     return s.toLowerCase();
   }

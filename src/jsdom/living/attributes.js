@@ -86,7 +86,12 @@ exports.changeAttribute = (element, attribute, value) => {
 exports.appendAttribute = function (element, attribute) {
   const attributeList = element._attributeList;
 
-  attributeList.push(attribute);
+  if (attributeList.length === 0) {
+    // Pushing to an empty array would allocate room for 17 attributes, while most elements only ever have one.
+    element._attributeList = [attribute];
+  } else {
+    attributeList.push(attribute);
+  }
   attribute._element = element;
   attribute._ownerDocument = element._ownerDocument;
 
@@ -100,7 +105,7 @@ exports.appendAttribute = function (element, attribute) {
     } else {
       entry.push(attribute);
     }
-  } else if (attributeList.length > NAME_MAP_THRESHOLD) {
+  } else if (element._attributeList.length > NAME_MAP_THRESHOLD) {
     buildNameMap(element);
   }
 

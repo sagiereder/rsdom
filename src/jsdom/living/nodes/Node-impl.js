@@ -18,6 +18,7 @@ const { setAnExistingAttributeValue } = require("../attributes");
 const NodeList = require("../../../generated/idl/NodeList");
 
 const treeHelpers = require("../helpers/dom-tree");
+const { LINK_ELEMENT, LINK_STEPS, LINK_CUSTOM_ELEMENT, LINK_ID_OR_NAME, LINK_VERSION_OBSERVED } = treeHelpers;
 const fastPathFlags = require("../helpers/fast-path-flags");
 const windowProperties = require("../window-properties");
 const { isNamedPropertyElement } = require("../helpers/document-named-properties");
@@ -110,7 +111,6 @@ function attributeListsEqual(elementA, elementB) {
 }
 
 const EMPTY_SET = new Set();
-const EMPTY_ARRAY = Object.freeze([]);
 
 // Set by `connectSubtree()` when it runs any element's insertion steps.
 let connectRanInsertionSteps = false;
@@ -254,6 +254,7 @@ class NodeImpl extends EventTargetImpl {
 
   _getMemoizedQueries() {
     if (this._memoizedQueries === null) {
+      treeHelpers.observeVersion(this);
       this._memoizedQueries = createMemoizedQueries();
     }
     return this._memoizedQueries;
@@ -521,18 +522,26 @@ class NodeImpl extends EventTargetImpl {
   // `kind`, `node`, and `name` describe the mutation for incremental live collection updates (see
   // ../helpers/mutation-journal.js); callers that don't pass them force those collections to rebuild.
   _invalidateCaches(kind = mutationJournal.OTHER, node = null, name = null) {
-    this._ownerDocument._mutationJournal?.record(kind, this, node, name);
-    for (let ancestor = this; ancestor !== null; ancestor = ancestor._links?.parent ?? null) {
-      ancestor._version++;
-      if (ancestor._memoizedQueries !== null) {
-        ancestor._memoizedQueries = null;
+    const document = this._ownerDocument;
+    document._mutationJournal?.record(kind, this, node, name);
+    // Only the versions that something checks need bumping, and only nodes with links can be observed. Walking the
+    // links objects avoids reading the many-shaped node objects.
+    for (let links = this._links; links !== null; links = links.parentLinks) {
+      if (links.flags & LINK_VERSION_OBSERVED) {
+        const ancestor = links.node;
+        ancestor._version++;
+        if (ancestor._memoizedQueries !== null) {
+          ancestor._memoizedQueries = null;
+        }
+        if (ancestor === this) {
+          this._childrenList?._invalidate();
+          this._childNodesList?._invalidate();
+        }
       }
     }
 
-    this._childrenList?._invalidate();
-    this._childNodesList?._invalidate();
-    if (this.isConnected) {
-      this._ownerDocument._clearStyleCache();
+    if (this._isInDocumentTree || (fastPathFlags.shadowRoots && this.isConnected)) {
+      document._clearStyleCache();
     }
   }
 
@@ -1079,7 +1088,10 @@ class NodeImpl extends EventTargetImpl {
 
   // https://dom.spec.whatwg.org/#concept-node-insert
   _insert(nodeImpl, childImpl, suppressObservers = false) {
-    let nodesImpl, postConnectionNodes;
+    // The nodes to insert: a fragment's children, or (without allocating a list) just `nodeImpl`.
+    let nodesImpl = null;
+    let postConnectionNodes;
+    let count = 1;
 
     if (nodeImpl.nodeType === NODE_TYPE.DOCUMENT_FRAGMENT_NODE) {
       nodesImpl = [];
@@ -1089,16 +1101,13 @@ class NodeImpl extends EventTargetImpl {
         nodeImpl._remove(child, true);
       }
 
-      if (nodesImpl.length === 0) {
-        return nodesImpl;
+      count = nodesImpl.length;
+      if (count === 0) {
+        return;
       }
 
-      queueTreeMutationRecord(nodeImpl, [], nodesImpl, null, null);
-    } else {
-      nodesImpl = [nodeImpl];
+      queueTreeMutationRecord(nodeImpl, null, nodesImpl, null, null);
     }
-
-    const count = nodesImpl.length;
 
     if (childImpl !== null && this._referencedRanges !== null) {
       let childIndex;
@@ -1126,7 +1135,8 @@ class NodeImpl extends EventTargetImpl {
     // run in between are the default ones (which cannot change the tree).
     let fusedWalk = true;
     const ownerDocument = this._ownerDocument;
-    for (const node of nodesImpl) {
+    for (let i = 0; i < count; i++) {
+      const node = nodesImpl === null ? nodeImpl : nodesImpl[i];
       // A subtree moved within the connected tree whose disconnecting and reconnecting would have no effect stays
       // connected: `_remove()` skips `disconnectSubtree()` for it, and it skips `connectSubtree()` below.
       let staysConnected = false;
@@ -1213,7 +1223,7 @@ class NodeImpl extends EventTargetImpl {
     }
 
     if (!suppressObservers) {
-      queueTreeMutationRecord(this, nodesImpl, [], previousChildImpl, childImpl);
+      queueTreeMutationRecord(this, nodesImpl ?? nodeImpl, null, previousChildImpl, childImpl);
     }
 
     this._childrenInsertedSteps();
@@ -1227,12 +1237,14 @@ class NodeImpl extends EventTargetImpl {
           }
         }
       }
-      return nodesImpl;
+      return;
     }
     postConnectionNodes = undefined;
 
     // Post-connection steps only run for connected nodes, and without shadow trees none are when the parent is not.
-    for (const node of fastPathFlags.shadowRoots || this._isInDocumentTree ? nodesImpl : EMPTY_ARRAY) {
+    const walkedCount = fastPathFlags.shadowRoots || this._isInDocumentTree ? count : 0;
+    for (let i = 0; i < walkedCount; i++) {
+      const node = nodesImpl === null ? nodeImpl : nodesImpl[i];
       if (fastPathFlags.shadowRoots) {
         for (const inclusiveDescendant of node._shadowIncludingInclusiveDescendants()) {
           if (inclusiveDescendant._postConnectionSteps) {
@@ -1258,8 +1270,6 @@ class NodeImpl extends EventTargetImpl {
         }
       }
     }
-
-    return nodesImpl;
   }
 
   // https://dom.spec.whatwg.org/#concept-node-append
@@ -1287,7 +1297,8 @@ class NodeImpl extends EventTargetImpl {
       this._remove(childImpl, true);
     }
 
-    const nodesImpl = this._insert(nodeImpl, referenceChildImpl, true);
+    const nodesImpl = nodeImpl.nodeType === NODE_TYPE.DOCUMENT_FRAGMENT_NODE ? nodeImpl._childrenToArray() : [nodeImpl];
+    this._insert(nodeImpl, referenceChildImpl, true);
 
     queueTreeMutationRecord(this, nodesImpl, removedNodesImpl, previousSiblingImpl, referenceChildImpl);
 
@@ -1422,7 +1433,7 @@ class NodeImpl extends EventTargetImpl {
         // Being moved by `_insert()`, which checked that the subtree has no checked inputs (no inputs at all).
         keepConnectedNode = null;
         if (!suppressObservers) {
-          queueTreeMutationRecord(this, [], [nodeImpl], oldPreviousSiblingImpl, oldNextSiblingImpl);
+          queueTreeMutationRecord(this, null, nodeImpl, oldPreviousSiblingImpl, oldNextSiblingImpl);
         }
         this._childrenChangedSteps();
         return;
@@ -1469,7 +1480,7 @@ class NodeImpl extends EventTargetImpl {
     updateRadioButtonGroupsForTreeChange(nodeImpl, this);
 
     if (!suppressObservers) {
-      queueTreeMutationRecord(this, [], [nodeImpl], oldPreviousSiblingImpl, oldNextSiblingImpl);
+      queueTreeMutationRecord(this, null, nodeImpl, oldPreviousSiblingImpl, oldNextSiblingImpl);
     }
 
     this._childrenChangedSteps();
@@ -1478,6 +1489,29 @@ class NodeImpl extends EventTargetImpl {
 
 // Per-instance defaults for rarely written fields; instances get an own property on first write.
 const baseRemovingSteps = NodeImpl.prototype._removingSteps;
+
+treeHelpers.setLinkFlagsComputer(node => {
+  let flags = 0;
+  if (node._removingSteps !== baseRemovingSteps || node._insertionSteps || node._postConnectionSteps) {
+    flags |= LINK_STEPS;
+  }
+  if (node.nodeType !== NODE_TYPE.ELEMENT_NODE) {
+    return flags;
+  }
+  flags |= LINK_ELEMENT;
+  if (node._ceState !== "uncustomized") {
+    flags |= LINK_CUSTOM_ELEMENT;
+  }
+  const attributes = node._attributeList;
+  for (let i = 0; i < attributes.length; i++) {
+    const attr = attributes[i];
+    if (attr._namespace === null && (attr._localName === "id" || attr._localName === "name")) {
+      flags |= LINK_ID_OR_NAME;
+      break;
+    }
+  }
+  return flags;
+});
 const baseChildrenChangedSteps = NodeImpl.prototype._childrenChangedSteps;
 
 // Without shadow trees, inserting `root` into the connected `parent` in one tree walk: adds the subtree to the document
@@ -1489,7 +1523,7 @@ const baseChildrenChangedSteps = NodeImpl.prototype._childrenChangedSteps;
 //
 // Also appends the subtree's nodes with post-connection steps to `postConnectionNodes` (an array or null), and returns
 // it. That list is only valid as the spec's static node list if nothing observable ran in between, so this sets
-// `connectRanInsertionSteps` when it ran any element's insertion steps.
+// `connectRanInsertionSteps` when it ran insertion steps that could change the tree (any but an input's).
 function connectSubtree(root, parent, postConnectionNodes) {
   const document = root._ownerDocument;
   const tracker = windowProperties.trackerForDocument(document);
@@ -1497,48 +1531,62 @@ function connectSubtree(root, parent, postConnectionNodes) {
   let stepNodes = null;
   let checkedInputs = null;
 
-  for (let node = root; node !== null; node = treeHelpers.nextInTree(node, root)) {
+  // Every node in the subtree has links: the root has a parent, and the others have parents in the subtree.
+  for (let node = root; node !== null;) {
     node._isInDocumentTree = true;
-    if (node.nodeType !== NODE_TYPE.ELEMENT_NODE) {
-      continue;
+    const links = node._links;
+    const { flags } = links;
+    if (flags & LINK_ID_OR_NAME) {
+      // Only the id and name attributes feed the caches.
+      const attributes = node._attributeList;
+      let id = null;
+      let name = null;
+      for (let i = 0; i < attributes.length; i++) {
+        const attr = attributes[i];
+        if (attr._namespace === null) {
+          if (attr._localName === "id") {
+            id = attr._value;
+          } else if (attr._localName === "name") {
+            name = attr._value;
+          }
+        }
+      }
+      if (id !== null || name !== null) {
+        if (tracker !== undefined) {
+          windowProperties.elementAttached(tracker, node, id);
+        }
+        if (id) {
+          document._byIdCache.add(id, node);
+        }
+        affectsNamedProperties ||= isNamedPropertyElement(node) && (Boolean(id) || Boolean(name));
+      }
     }
-    // Only the id and name attributes feed the caches.
-    const attributes = node._attributeList;
-    let id = null;
-    let name = null;
-    for (let i = 0; i < attributes.length; i++) {
-      const attr = attributes[i];
-      if (attr._namespace === null) {
-        if (attr._localName === "id") {
-          id = attr._value;
-        } else if (attr._localName === "name") {
-          name = attr._value;
+    if (flags & LINK_STEPS && flags & LINK_ELEMENT) {
+      if (node._postConnectionSteps) {
+        (postConnectionNodes ??= []).push(node);
+      }
+      if (node._insertionSteps) {
+        if (node._localName === "input" && node._namespaceURI === HTML_NS) {
+          // An input's insertion steps only uncheck other radio buttons, which cannot change the tree; for an
+          // unchecked input they do nothing (earlier steps can uncheck it, never check it).
+          if (node._checkedness) {
+            (checkedInputs ??= []).push(node);
+            (stepNodes ??= []).push(node);
+          }
+        } else {
+          (stepNodes ??= []).push(node);
+          connectRanInsertionSteps = true;
         }
       }
     }
-    if (id !== null || name !== null) {
-      if (tracker !== undefined) {
-        windowProperties.elementAttached(tracker, node, id);
-      }
-      if (id) {
-        document._byIdCache.add(id, node);
-      }
-      affectsNamedProperties ||= isNamedPropertyElement(node) && (Boolean(id) || Boolean(name));
-    }
-    if (node._postConnectionSteps) {
-      (postConnectionNodes ??= []).push(node);
-    }
-    if (node._insertionSteps) {
-      (stepNodes ??= []).push(node);
-      if (node._localName === "input" && node._checkedness && node._namespaceURI === HTML_NS) {
-        (checkedInputs ??= []).push(node);
+    if (flags & LINK_CUSTOM_ELEMENT) {
+      if (node._ceState === "custom") {
+        enqueueCECallbackReaction(node, "connectedCallback", []);
+      } else {
+        tryUpgradeElement(node);
       }
     }
-    if (node._ceState === "custom") {
-      enqueueCECallbackReaction(node, "connectedCallback", []);
-    } else {
-      tryUpgradeElement(node);
-    }
+    node = links.firstChild ?? treeHelpers.nextAfterSubtree(node, root);
   }
 
   if (affectsNamedProperties) {
@@ -1548,7 +1596,6 @@ function connectSubtree(root, parent, postConnectionNodes) {
     updateRadioButtonGroupsForInsertedInputs(checkedInputs, parent);
   }
   if (stepNodes !== null) {
-    connectRanInsertionSteps = true;
     for (const node of stepNodes) {
       node._insertionSteps();
     }
@@ -1556,33 +1603,42 @@ function connectSubtree(root, parent, postConnectionNodes) {
   return postConnectionNodes;
 }
 
+function isUncheckedInput(node) {
+  return node._localName === "input" && node._namespaceURI === HTML_NS && !node._checkedness;
+}
+
 // Without shadow trees, whether removing the connected `root` from its parent and inserting it elsewhere in the same
 // document's tree can skip `disconnectSubtree()` and `connectSubtree()`: true when they would have no net effect.
-// That needs no node with removing, insertion or post-connection steps (these include every input, so no radio button
-// group changes either), no custom element or element that could be upgraded, no id or name attribute (the caches
-// would only be reordered), the focused element outside the subtree, and default children changed steps for the old
-// parent, which run while the subtree is detached.
+// That needs no node with removing, insertion or post-connection steps other than an unchecked input (whose insertion
+// steps do nothing, so no radio button group changes either), no custom element or element that could be upgraded, no
+// id or name attribute (the caches would only be reordered), the focused element outside the subtree, and default
+// children changed steps for the old parent, which run while the subtree is detached.
 function canMoveConnected(root) {
   if (root.parentNode._childrenChangedSteps !== baseChildrenChangedSteps) {
     return false;
   }
   const lastFocusedElement = root._ownerDocument._lastFocusedElement;
-  for (let node = root; node !== null; node = treeHelpers.nextInTree(node, root)) {
+  for (let node = root; node !== null;) {
+    const links = node._links;
+    const { flags } = links;
     // Only elements have these steps, or can be focused.
-    if (node.nodeType !== NODE_TYPE.ELEMENT_NODE) {
-      continue;
-    }
-    if (node._removingSteps !== baseRemovingSteps || node._insertionSteps || node._postConnectionSteps ||
-        node === lastFocusedElement || node._ceState === "custom" || node._ceState === "undefined") {
-      return false;
-    }
-    const attributes = node._attributeList;
-    for (let i = 0; i < attributes.length; i++) {
-      const attr = attributes[i];
-      if (attr._namespace === null && (attr._localName === "id" || attr._localName === "name")) {
+    if (flags & LINK_ELEMENT) {
+      // An input's only steps are its insertion steps, which do nothing while it is unchecked.
+      if ((flags & LINK_STEPS && !isUncheckedInput(node)) || node === lastFocusedElement ||
+          (flags & LINK_CUSTOM_ELEMENT && (node._ceState === "custom" || node._ceState === "undefined"))) {
         return false;
       }
+      if (flags & LINK_ID_OR_NAME) {
+        const attributes = node._attributeList;
+        for (let i = 0; i < attributes.length; i++) {
+          const attr = attributes[i];
+          if (attr._namespace === null && (attr._localName === "id" || attr._localName === "name")) {
+            return false;
+          }
+        }
+      }
     }
+    node = links.firstChild ?? treeHelpers.nextAfterSubtree(node, root);
   }
   return true;
 }
@@ -1599,24 +1655,32 @@ function disconnectSubtree(root, parent) {
   // Only this walk's own focus fixup changes it, and at most one node matches.
   const lastFocusedElement = document._lastFocusedElement;
 
-  for (let node = root; node !== null; node = treeHelpers.nextInTree(node, root)) {
+  for (let node = root; node !== null;) {
+    const links = node._links;
+    const { flags } = links;
     node._isInDocumentTree = false;
     // The removed subtree's root is no longer the document. Skip the write when the prototype default is in effect,
     // which keeps from giving every removed node its own property.
     if (node._cachedRoot !== null) {
       node._cachedRoot = null;
     }
-    if (node._removingSteps === baseRemovingSteps) {
-      if (node === lastFocusedElement) {
-        document._lastFocusedElement = document;
-      }
-    } else {
+    if (flags & LINK_STEPS && node._removingSteps !== baseRemovingSteps) {
       (stepNodes ??= []).push(node);
+    } else if (node === lastFocusedElement) {
+      document._lastFocusedElement = document;
     }
-    if (node.nodeType !== NODE_TYPE.ELEMENT_NODE) {
+    const current = node;
+    node = links.firstChild ?? treeHelpers.nextAfterSubtree(node, root);
+    if (!(flags & LINK_ELEMENT)) {
       continue;
     }
-    const attributes = node._attributeList;
+    if (flags & LINK_CUSTOM_ELEMENT && current._ceState === "custom") {
+      (customElements ??= []).push(current);
+    }
+    if (!(flags & LINK_ID_OR_NAME)) {
+      continue;
+    }
+    const attributes = current._attributeList;
     let id = null;
     let hasIdOrName = false;
     for (let i = 0; i < attributes.length; i++) {
@@ -1631,18 +1695,15 @@ function disconnectSubtree(root, parent) {
       }
     }
     if (hasIdOrName) {
-      if (isNamedPropertyElement(node)) {
-        document._namedPropertyElementRemoved(node);
+      if (isNamedPropertyElement(current)) {
+        document._namedPropertyElementRemoved(current);
       }
       if (tracker !== undefined) {
-        windowProperties.elementDetached(tracker, node, id);
+        windowProperties.elementDetached(tracker, current, id);
       }
       if (id) {
-        document._byIdCache.delete(id, node);
+        document._byIdCache.delete(id, current);
       }
-    }
-    if (node._ceState === "custom") {
-      (customElements ??= []).push(node);
     }
   }
 

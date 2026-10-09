@@ -58,6 +58,20 @@ function appendMutationRecord(observer, recordData) {
   activeMutationObservers.add(observer);
 }
 
+// The added and removed nodes are passed as null for none or as a node for just that one, which avoids allocating the
+// lists when no observer wants the record.
+function toNodeArray(nodes) {
+  if (nodes === null) {
+    return [];
+  }
+  return Array.isArray(nodes) ? nodes : [nodes];
+}
+
+// Kept out of queueMutationRecord, since a closure over its arguments would allocate a context on every call.
+function filterIncludes(attributeFilter, name, namespace) {
+  return attributeFilter.some(value => value === name || value === namespace);
+}
+
 // https://dom.spec.whatwg.org/#queue-a-mutation-record
 function queueMutationRecord(
   type,
@@ -95,7 +109,7 @@ function queueMutationRecord(
         !(node !== target && options.subtree === false) &&
         !(type === MUTATION_TYPE.ATTRIBUTES && options.attributes !== true) &&
         !(type === MUTATION_TYPE.ATTRIBUTES && options.attributeFilter &&
-          !options.attributeFilter.some(value => value === name || value === namespace)) &&
+          !filterIncludes(options.attributeFilter, name, namespace)) &&
         !(type === MUTATION_TYPE.CHARACTER_DATA && options.characterData !== true) &&
         !(type === MUTATION_TYPE.CHILD_LIST && options.childList === false)
       ) {
@@ -133,8 +147,8 @@ function queueMutationRecord(
       attributeName: name,
       attributeNamespace: namespace,
       oldValue: firstMappedOldValue,
-      addedNodes,
-      removedNodes,
+      addedNodes: toNodeArray(addedNodes),
+      removedNodes: toNodeArray(removedNodes),
       previousSibling,
       nextSibling
     };
@@ -175,8 +189,8 @@ function queueAttributeMutationRecord(target, name, namespace, oldValue) {
     name,
     namespace,
     oldValue,
-    [],
-    [],
+    null,
+    null,
     null,
     null
   );

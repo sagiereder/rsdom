@@ -12,6 +12,7 @@ const HTMLCollection = require("../../../generated/idl/HTMLCollection");
 const HTMLOptionsCollection = require("../../../generated/idl/HTMLOptionsCollection");
 const { getLabelsForLabelable, formOwner, isDisabled } = require("../helpers/form-controls");
 const { parseNonNegativeInteger } = require("../helpers/strings");
+const { observeVersion } = require("../helpers/dom-tree");
 
 class HTMLSelectElementImpl extends HTMLElementImpl {
   // A reset is idempotent until the tree, attributes, or selectedness changes. Tree/attribute mutations update
@@ -89,6 +90,7 @@ class HTMLSelectElementImpl extends HTMLElementImpl {
         option._selectedness = index === selected.length - 1;
       });
     }
+    observeVersion(this);
     this.#lastSelectednessResetVersion = this._version;
   }
 

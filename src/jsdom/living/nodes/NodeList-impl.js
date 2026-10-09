@@ -1,6 +1,7 @@
 "use strict";
 
 const idlUtils = require("../../../generated/idl/utils.js");
+const { observeVersion } = require("../helpers/dom-tree");
 
 exports.implementation = class NodeListImpl {
   constructor(globalObject, args, privateData) {
@@ -12,6 +13,7 @@ exports.implementation = class NodeListImpl {
       this._isLive = true;
       this._version = -1;
       this._element = privateData.element;
+      observeVersion(this._element);
       this._query = privateData.query;
       this._update();
     }
