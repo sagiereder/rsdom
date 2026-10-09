@@ -12,16 +12,22 @@ This file sets the performance targets for moving jsdom hot paths to Rust. It co
 ```sh
 source .devshim/env.sh
 cd bench-rs && npm install          # once
-node run.js                         # upstream vs fork (native on)
+node run.js                         # upstream vs fork-js vs fork (native on) vs happy-dom
+node run.js --mode upstream         # upstream vs fork
 node run.js --mode native           # fork-js (JSDOM_NATIVE=0) vs fork
-node run.js --mode all              # upstream vs fork-js vs fork
+node run.js --mode happy            # happy-dom vs fork
 node run.js --filter react --quick  # subset, 1 warmup + 3 iterations
 node run.js --stat min              # rank by fastest iteration (use on a loaded machine)
 node profile.js react/testing-library-form --impl fork-js --top 40
 ```
 
 - Each (impl, scenario) pair runs in its own `node --expose-gc` child process.
-- Each iteration gets an untimed `setup()`, usually a fresh JSDOM, followed by a forced GC. Only `run()` is timed.
+- Each iteration gets an untimed `setup()`, usually a fresh DOM, followed by a forced GC. Only `run()` is timed.
+- Scenarios create DOMs through `ctx.createDom(html, opts)` (`lib/impls.js`), which wraps `new JSDOM(html, opts)` or
+  happy-dom's `new Window({ url, settings })` + `document.write(html)` behind one `{ window, serialize(), close() }`
+  handle. happy-dom windows are closed with `window.happyDOM.close()`.
+- A scenario an impl cannot run declares `unsupported: { impl: reason }` and is reported as N/A. A scenario where an
+  impl runs but gives different results declares `caveats` and is marked `*` in the table.
 - Results go to `results/<timestamp>.json`. Only `results/baseline.json` is committed.
 - `profile.js` uses the in-process inspector Profiler. It samples every 100µs and only during the measured `run()` calls.
 - `profile.js` prints four reports:

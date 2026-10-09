@@ -46,11 +46,11 @@ const COMPLEX = [
   ".panel > .cards > .card > .card-head > .badge.b3"
 ];
 
-function setup({ JSDOM }, { html }) {
-  const dom = freshDom(JSDOM, `<!DOCTYPE html><html><head></head><body>${html}</body></html>`);
+function setup(ctx, { html }) {
+  const dom = freshDom(ctx, `<!DOCTYPE html><html><head></head><body>${html}</body></html>`);
   return { dom, document: dom.window.document };
 }
-const teardown = st => st.dom.window.close();
+const teardown = st => st.dom.close();
 const prepare = () => ({ html: appHtml() });
 
 module.exports = [
@@ -58,6 +58,10 @@ module.exports = [
     name: "selectors/complex-qsa",
     group: "selectors",
     desc: `${COMPLEX.length} complex selectors via document.querySelectorAll on ~8k-element tree (x2)`,
+    caveats: {
+      "happy-dom": "wrong results: ':enabled' matches nothing (0 vs 500) and '.cards article:nth-child(5n) ~ " +
+        "article:last-child' returns duplicates (80 vs 20)"
+    },
     prepare,
     setup,
     run({ document }) {

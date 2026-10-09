@@ -23,11 +23,11 @@ function tableHtml() {
   return s + "</tbody></table>";
 }
 
-function withTable({ JSDOM }, { html }) {
-  const dom = freshDom(JSDOM, `<!DOCTYPE html><html><head></head><body>${html}</body></html>`);
+function withTable(ctx, { html }) {
+  const dom = freshDom(ctx, `<!DOCTYPE html><html><head></head><body>${html}</body></html>`);
   return { dom, document: dom.window.document, table: dom.window.document.getElementById("t") };
 }
-const teardown = st => st.dom.window.close();
+const teardown = st => st.dom.close();
 const prepare = () => ({ html: tableHtml() });
 
 module.exports = [
@@ -36,7 +36,7 @@ module.exports = [
     group: "tables",
     desc: `parse ${ROWS}x${COLS} table via innerHTML`,
     prepare,
-    setup: ({ JSDOM }, { html }) => ({ dom: freshDom(JSDOM), html }),
+    setup: (ctx, { html }) => ({ dom: freshDom(ctx), html }),
     run({ dom, html }) {
       dom.window.document.body.innerHTML = html;
     },
@@ -80,6 +80,7 @@ module.exports = [
     name: "tables/sort-rows",
     group: "tables",
     desc: "sort rows by numeric column 3 by re-appending tr nodes (asc then desc)",
+    unsupported: { "happy-dom": "HTMLTableSectionElement.rows is not implemented (tbody.rows is undefined)" },
     prepare,
     setup: withTable,
     run({ table }) {

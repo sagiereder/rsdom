@@ -2,7 +2,7 @@
 // CPU-profile one scenario (measured iterations only, via the inspector Profiler in worker.js) and print
 // aggregated hotspots.
 //
-//   node profile.js <scenario-substring> [--impl fork|fork-js|upstream] [--iters 5] [--warmup 2]
+//   node profile.js <scenario-substring> [--impl fork|fork-js|upstream|happy-dom] [--iters 5] [--warmup 2]
 //                   [--sampling-us 100] [--top 40] [--json out.json] [--keep]
 //
 // Output sections:

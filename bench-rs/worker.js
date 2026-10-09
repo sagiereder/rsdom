@@ -3,7 +3,7 @@
 //   node --expose-gc worker.js --impl fork --scenario divs/innerHTML [--warmup 3] [--iters 10]
 //        [--budget-ms 30000] [--profile out.json] [--sampling-us 100]
 const fs = require("node:fs");
-const { IMPLS, nativeLoaded } = require("./lib/impls.js");
+const { IMPLS, createDomFactory, nativeLoaded } = require("./lib/impls.js");
 
 const MARKER = "__BENCH_RESULT__";
 
@@ -40,8 +40,14 @@ async function main() {
   const budgetMs = Number(args["budget-ms"] ?? 30000);
   const gc = typeof globalThis.gc === "function" ? globalThis.gc : () => {};
 
-  const { JSDOM } = require(impl.modulePath());
-  const ctx = { JSDOM, impl: implName };
+  if (scenario.unsupported && scenario.unsupported[implName]) {
+    // Not runnable on this impl (missing API); report N/A with the reason instead of failing.
+    const result = { impl: implName, scenario: scenario.name, na: scenario.unsupported[implName] };
+    process.stdout.write(`\n${MARKER}${JSON.stringify(result)}\n`);
+    process.exit(0);
+  }
+
+  const ctx = { impl: implName, createDom: createDomFactory(implName) };
   const shared = scenario.prepare ? await scenario.prepare(ctx) : undefined;
 
   let session = null;
@@ -108,7 +114,7 @@ async function main() {
     rssMB: Math.round(process.memoryUsage().rss / 1048576)
   };
   process.stdout.write(`\n${MARKER}${JSON.stringify(result)}\n`);
-  // jsdom windows/react may leave handles open; exit explicitly.
+  // DOM windows/react may leave handles open; exit explicitly.
   process.exit(0);
 }
 

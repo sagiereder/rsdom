@@ -47,8 +47,8 @@ module.exports = [
     name: "events/bubble-deep",
     group: "events",
     desc: `dispatch 4000 bubbling click events through a ${DEPTH}-deep tree with capture+bubble listeners on every level`,
-    setup({ JSDOM }) {
-      const dom = freshDom(JSDOM);
+    setup(ctx) {
+      const dom = freshDom(ctx);
       const { document, MouseEvent, Event } = dom.window;
       const { chain, button } = deepTree(document);
       const counter = { n: 0 };
@@ -75,14 +75,14 @@ module.exports = [
       }
       return counter.n;
     },
-    teardown: st => st.dom.window.close()
+    teardown: st => st.dom.close()
   },
   {
     name: "events/many-targets-delegation",
     group: "events",
     desc: "React-style root delegation: 750 elements each get click() + focus(), root listener inspects target",
-    setup({ JSDOM }) {
-      const dom = freshDom(JSDOM);
+    setup(ctx) {
+      const dom = freshDom(ctx);
       const { document } = dom.window;
       const root = document.createElement("div");
       document.body.appendChild(root);
@@ -107,14 +107,14 @@ module.exports = [
       }
       return counter.n;
     },
-    teardown: st => st.dom.window.close()
+    teardown: st => st.dom.close()
   },
   {
     name: "style/inline-set",
     group: "style",
     desc: "React-style inline style writes: 3000 elements x 10 properties (style.x=, setProperty, cssText read)",
-    setup({ JSDOM }) {
-      const dom = freshDom(JSDOM);
+    setup(ctx) {
+      const dom = freshDom(ctx);
       const { document } = dom.window;
       const els = [];
       for (let i = 0; i < 3000; i++) {
@@ -142,13 +142,17 @@ module.exports = [
       }
       return n;
     },
-    teardown: st => st.dom.window.close()
+    teardown: st => st.dom.close()
   },
   {
     name: "style/computed-style",
     group: "style",
     desc: "getComputedStyle on 1500 elements with a 200-rule stylesheet, reading 6 properties each",
-    setup({ JSDOM }) {
+    caveats: {
+      "happy-dom": "does less work: values are not resolved (color stays 'red' instead of 'rgb(255, 0, 0)', " +
+        "calc() is left unevaluated, unset properties like visibility return '')"
+    },
+    setup(ctx) {
       let body = "<div id=\"root\">";
       for (let r = 0; r < 300; r++) {
         body += `<section class="row c${r % 50}" data-k="${r % 13}">`;
@@ -158,7 +162,7 @@ module.exports = [
         body += "</section>";
       }
       body += "</div>";
-      const dom = freshDom(JSDOM, `<!DOCTYPE html><html><head><style>${genStylesheet()}</style></head><body>${body}</body></html>`);
+      const dom = freshDom(ctx, `<!DOCTYPE html><html><head><style>${genStylesheet()}</style></head><body>${body}</body></html>`);
       const els = Array.from(dom.window.document.querySelectorAll("#root *")).slice(0, 1500);
       return { dom, els };
     },
@@ -171,6 +175,6 @@ module.exports = [
       }
       return n;
     },
-    teardown: st => st.dom.window.close()
+    teardown: st => st.dom.close()
   }
 ];
