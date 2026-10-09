@@ -256,6 +256,24 @@ function implementsInterface(wrapperInterfaceDescriptor, interfaceDescriptor) {
   return interfaces[depth] === interfaceDescriptor;
 }`;
 
+// [SameObject] attribute getters pass getSameObject() a closure over the implementation, which allocates on every
+// get. They instead look the cached object up first, and only compute it on a miss.
+const SAME_OBJECT_ORIGINAL = `function getSameObject(wrapper, prop, creator) {`;
+const SAME_OBJECT_REPLACEMENT = `function cachedSameObject(wrapper, prop) {
+  const cache = wrapper[sameObjectCaches];
+  return cache === undefined ? undefined : cache[prop];
+}
+
+function cacheSameObject(wrapper, prop, value) {
+  if (!wrapper[sameObjectCaches]) {
+    wrapper[sameObjectCaches] = Object.create(null);
+  }
+  wrapper[sameObjectCaches][prop] = value;
+  return value;
+}
+
+${SAME_OBJECT_ORIGINAL}`;
+
 function postProcessUtils() {
   const utilsPath = path.resolve(outputDir, "utils.js");
   let source = fs.readFileSync(utilsPath, "utf8");
@@ -263,7 +281,9 @@ function postProcessUtils() {
     [ARRAY_INDEX_ORIGINAL, ARRAY_INDEX_FAST],
     [INTERFACE_DESCRIPTOR_ORIGINAL, INTERFACE_DESCRIPTOR_REPLACEMENT],
     [WRAPPER_LOOKUP_ORIGINAL, WRAPPER_LOOKUP_REPLACEMENT],
-    ["  registerWrapper,\n", "  registerWrapper,\n  registerProxyWrapper,\n"]
+    ["  registerWrapper,\n", "  registerWrapper,\n  registerProxyWrapper,\n"],
+    [SAME_OBJECT_ORIGINAL, SAME_OBJECT_REPLACEMENT],
+    ["  getSameObject,\n", "  getSameObject,\n  cachedSameObject,\n  cacheSameObject,\n"]
   ]) {
     if (!source.includes(original)) {
       throw new Error(`convert.js: could not post-process generated utils.js: ${original.split("\n")[0]} not found`);
@@ -423,12 +443,84 @@ function postProcessStringArguments(file) {
   }
 }
 
+// Operations collect their converted arguments in an array and spread it into the implementation call, which allocates
+// the array (and V8 does not elide it) on every call. When every argument is pushed unconditionally, in its own bare
+// block, use one local per argument instead.
+function postProcessArgumentArrays(file) {
+  const lines = fs.readFileSync(file, "utf8").split("\n");
+  let changed = false;
+  for (let i = 0; i < lines.length; i++) {
+    const declMatch = /^( +)const args = \[\];$/u.exec(lines[i]);
+    if (declMatch === null) {
+      continue;
+    }
+    const ind = declMatch[1];
+    // The region is the rest of the enclosing block: up to the first line indented less than the declaration.
+    let end = i + 1;
+    while (end < lines.length && lines[end] !== null && (lines[end] === "" || lines[end].startsWith(ind))) {
+      end++;
+    }
+    const pushLines = [];
+    const spreadLines = [];
+    let ok = true;
+    for (let j = i + 1; j < end && ok; j++) {
+      if (!/\bargs\b/u.test(lines[j])) {
+        continue;
+      }
+      if (lines[j] === `${ind}  args.push(curArg);`) {
+        // The push must end a bare block at the declaration's level, not a loop or a conditional.
+        let k = j - 1;
+        while (!(lines[k].startsWith(ind) && lines[k][ind.length] !== " ")) {
+          k--;
+        }
+        ok = lines[k] === `${ind}{` && lines[k + 1] === `${ind}  let curArg = arguments[${pushLines.length}];`;
+        pushLines.push(j);
+      } else if (lines[j].includes("(...args)") && lines[j].match(/\bargs\b/gu).length === 1) {
+        spreadLines.push(j);
+      } else {
+        ok = false;
+      }
+    }
+    if (!ok) {
+      continue;
+    }
+    const names = pushLines.map((_, n) => `$arg${n}`);
+    lines[i] = names.length === 0 ? null : `${ind}let ${names.join(", ")};`;
+    pushLines.forEach((j, n) => {
+      lines[j] = `${ind}  ${names[n]} = curArg;`;
+    });
+    for (const j of spreadLines) {
+      lines[j] = lines[j].replace("(...args)", `(${names.join(", ")})`);
+    }
+    changed = true;
+  }
+  if (changed) {
+    fs.writeFileSync(file, lines.filter(line => line !== null).join("\n"));
+  }
+}
+
+// See SAME_OBJECT_REPLACEMENT. Only getters whose creator is a single return statement are rewritten.
+function postProcessSameObject(file) {
+  const source = fs.readFileSync(file, "utf8");
+  const pattern = /^( +)return utils\.getSameObject\(this, ("[A-Za-z]+"), \(\) => \{\n +return ([^\n;]+);\n +\}\);$/gmu;
+  const replaced = source.replace(
+    pattern,
+    (_, ind, prop, expr) => `${ind}const $cached = utils.cachedSameObject(this, ${prop});\n` +
+      `${ind}return $cached !== undefined ? $cached : utils.cacheSameObject(this, ${prop}, ${expr});`
+  );
+  if (replaced !== source) {
+    fs.writeFileSync(file, replaced);
+  }
+}
+
 function postProcessWrappers() {
   for (const name of fs.readdirSync(outputDir)) {
     if (name.endsWith(".js")) {
       const file = path.resolve(outputDir, name);
       postProcessProxyWrapper(file);
       postProcessStringArguments(file);
+      postProcessArgumentArrays(file);
+      postProcessSameObject(file);
     }
   }
 }
