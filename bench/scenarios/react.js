@@ -1,17 +1,17 @@
 "use strict";
 // React scenarios. React/react-dom are loaded once per process (after installing a bootstrap window's globals,
-// which react-dom needs at module load); each iteration then gets a fresh JSDOM whose globals are installed
+// which react-dom needs at module load); each iteration then gets a fresh window whose globals are installed
 // before rendering.
 const { freshDom, installGlobals } = require("../lib/common.js");
 const { makeApps } = require("./react-apps.js");
 
 // `prod` loads React's production builds. They have no `act()`, so updates are flushed with `flushSync()` instead,
 // which renders synchronously; none of the benchmark apps use passive effects.
-function loadReact({ JSDOM }, { rtl = false, prod = false } = {}) {
+function loadReact(ctx, { rtl = false, prod = false } = {}) {
   if (prod) {
     process.env.NODE_ENV = "production";
   }
-  const boot = freshDom(JSDOM, "<!DOCTYPE html><html><head></head><body></body></html>", { url: "http://localhost/" });
+  const boot = freshDom(ctx, "<!DOCTYPE html><html><head></head><body></body></html>", { url: "http://localhost/" });
   installGlobals(boot.window);
   const React = require("react");
   const ReactDOM = require("react-dom");
@@ -28,14 +28,14 @@ function loadReact({ JSDOM }, { rtl = false, prod = false } = {}) {
   return shared;
 }
 
-function freshWindow(JSDOM) {
-  const dom = freshDom(JSDOM, "<!DOCTYPE html><html><head><title>App</title></head><body></body></html>", { url: "http://localhost/" });
+function freshWindow(ctx) {
+  const dom = freshDom(ctx, "<!DOCTYPE html><html><head><title>App</title></head><body></body></html>", { url: "http://localhost/" });
   installGlobals(dom.window);
   return dom;
 }
 
-function renderDashboard({ JSDOM }, shared) {
-  const dom = freshWindow(JSDOM);
+function renderDashboard(ctx, shared) {
+  const dom = freshWindow(ctx);
   const { React, ReactDOMClient, apps, act } = shared;
   const container = dom.window.document.createElement("div");
   dom.window.document.body.appendChild(container);
@@ -47,7 +47,7 @@ async function closeDashboard(st) {
   if (st.root) {
     await st.act(() => st.root.unmount());
   }
-  st.dom.window.close();
+  await st.dom.close();
 }
 
 // Sets a form control's value the way a user edit would (through the prototype setter, bypassing React's value
@@ -115,8 +115,8 @@ function dashboardScenarios(prefix, prod) {
       group: prefix,
       desc: `root.unmount() of 8 rendered dashboards (~33k elements total)${label}`,
       prepare,
-      async setup({ JSDOM }, { React, ReactDOMClient, apps, act }) {
-        const dom = freshWindow(JSDOM);
+      async setup(ctx, { React, ReactDOMClient, apps, act }) {
+        const dom = freshWindow(ctx);
         const roots = [];
         for (let i = 0; i < 8; i++) {
           const container = dom.window.document.createElement("div");
@@ -134,7 +134,7 @@ function dashboardScenarios(prefix, prod) {
           }
         });
       },
-      teardown: st => st.dom.window.close()
+      teardown: st => st.dom.close()
     },
     {
       name: `${prefix}/complex-app`,
@@ -176,8 +176,8 @@ module.exports = [
     group: "react",
     desc: "@testing-library/react: render form+todo app, getByRole/getByText/getAllByRole queries, fireEvent typing + clicks",
     prepare: ctx => loadReact(ctx, { rtl: true }),
-    setup({ JSDOM }, shared) {
-      return { dom: freshWindow(JSDOM), ...shared };
+    setup(ctx, shared) {
+      return { dom: freshWindow(ctx), ...shared };
     },
     run(st) {
       const { RTL, React, apps } = st;
@@ -217,7 +217,7 @@ module.exports = [
     },
     teardown(st) {
       st.RTL.cleanup();
-      st.dom.window.close();
+      return st.dom.close();
     }
   },
   ...dashboardScenarios("react-prod", true)

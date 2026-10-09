@@ -13,11 +13,13 @@ function rng(seed = 42) {
   };
 }
 
-function freshDom(JSDOM, html = "<!DOCTYPE html><html><head></head><body></body></html>", options = {}) {
-  return new JSDOM(html, options);
+// Creates a fresh DOM via the impl adapter (lib/impls.js createDomFactory). Returns a handle with
+// { window, serialize(), close() }; close() may return a promise.
+function freshDom(ctx, html = "<!DOCTYPE html><html><head></head><body></body></html>", options = {}) {
+  return ctx.createDom(html, options);
 }
 
-// Install a JSDOM window's properties as Node globals (similar to global-jsdom). Re-installable: each call
+// Install a DOM window's properties as Node globals (similar to global-jsdom). Re-installable: each call
 // overwrites the keys installed by the previous call so a fresh window can be swapped in per iteration.
 const originalGlobalKeys = new Set(Object.getOwnPropertyNames(globalThis));
 const FORCE_KEYS = ["window", "document", "navigator", "location", "self", "Event", "EventTarget", "CustomEvent",

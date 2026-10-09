@@ -29,41 +29,41 @@ module.exports = [
     group: "large",
     desc: "parse ~50k-node nested/wide tree via innerHTML",
     prepare: () => ({ html: treeHtml() }),
-    setup: ({ JSDOM }, { html }) => ({ dom: freshDom(JSDOM), html }),
+    setup: (ctx, { html }) => ({ dom: freshDom(ctx), html }),
     run({ dom, html }) {
       dom.window.document.body.innerHTML = html;
     },
-    teardown: st => st.dom.window.close()
+    teardown: st => st.dom.close()
   },
   {
     name: "large/jsdom-full-parse",
     group: "large",
-    desc: "new JSDOM(html) with ~50k-node body",
+    desc: "create a DOM from a full document with ~50k-node body (new JSDOM(html) / happy-dom new Window + document.write)",
     prepare: () => ({ html: fullDocument(treeHtml()) }),
-    setup: ({ JSDOM }, { html }) => ({ JSDOM, html }),
+    setup: (ctx, { html }) => ({ createDom: ctx.createDom, html }),
     run(st) {
-      st.dom = new st.JSDOM(st.html);
+      st.dom = st.createDom(st.html);
     },
-    teardown: st => st.dom && st.dom.window.close()
+    teardown: st => st.dom && st.dom.close()
   },
   {
     name: "large/serialize-outerHTML",
     group: "large",
     desc: "body.outerHTML of ~50k-node tree (x4)",
     prepare: () => ({ html: fullDocument(treeHtml()) }),
-    setup: ({ JSDOM }, { html }) => ({ dom: new JSDOM(html) }),
+    setup: (ctx, { html }) => ({ dom: ctx.createDom(html) }),
     run({ dom }) {
       const { body } = dom.window.document;
       return body.outerHTML.length + body.innerHTML.length + body.outerHTML.length + body.innerHTML.length;
     },
-    teardown: st => st.dom.window.close()
+    teardown: st => st.dom.close()
   },
   {
     name: "large/serialize-dom",
     group: "large",
     desc: "dom.serialize() of ~50k-node document (x4)",
     prepare: () => ({ html: fullDocument(treeHtml()) }),
-    setup: ({ JSDOM }, { html }) => ({ dom: new JSDOM(html) }),
+    setup: (ctx, { html }) => ({ dom: ctx.createDom(html) }),
     run({ dom }) {
       let n = 0;
       for (let i = 0; i < 4; i++) {
@@ -71,20 +71,20 @@ module.exports = [
       }
       return n;
     },
-    teardown: st => st.dom.window.close()
+    teardown: st => st.dom.close()
   },
   {
     name: "large/cloneNode-deep",
     group: "large",
     desc: "cloneNode(true) of ~50k-node tree and append it",
     prepare: () => ({ html: fullDocument(treeHtml()) }),
-    setup: ({ JSDOM }, { html }) => ({ dom: new JSDOM(html) }),
+    setup: (ctx, { html }) => ({ dom: ctx.createDom(html) }),
     run({ dom }) {
       const { document } = dom.window;
       const root = document.getElementById("nroot");
       const clone = root.cloneNode(true);
       document.body.appendChild(clone);
     },
-    teardown: st => st.dom.window.close()
+    teardown: st => st.dom.close()
   }
 ];

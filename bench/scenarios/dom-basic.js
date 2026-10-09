@@ -21,11 +21,11 @@ function liHtml(n) {
   return s;
 }
 
-const domSetup = ({ JSDOM }) => {
-  const dom = freshDom(JSDOM);
+const domSetup = ctx => {
+  const dom = freshDom(ctx);
   return { dom, document: dom.window.document };
 };
-const domTeardown = st => st.dom.window.close();
+const domTeardown = st => st.dom.close();
 
 module.exports = [
   {

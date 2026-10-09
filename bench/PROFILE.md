@@ -2,7 +2,7 @@
 
 This file sets the performance targets for moving jsdom hot paths to Rust. It covers:
 
-- the scenarios in `bench/scenarios/`
+- the scenarios in `bench-rs/scenarios/`
 - the baseline timings, with upstream jsdom@30.1.2, the fork with JS only, and the fork with native enabled
 - the CPU hotspots for each scenario group
 - a ranked list of what should move to Rust and what should be fixed in JS
@@ -12,23 +12,29 @@ This file sets the performance targets for moving jsdom hot paths to Rust. It co
 ```sh
 source .devshim/env.sh
 cd bench && npm install          # once
-node run.js                         # upstream vs fork (native on)
+node run.js                         # upstream vs fork-js vs fork (native on) vs happy-dom
+node run.js --mode upstream         # upstream vs fork
 node run.js --mode native           # fork-js (JSDOM_NATIVE=0) vs fork
-node run.js --mode all              # upstream vs fork-js vs fork
+node run.js --mode happy            # happy-dom vs fork
 node run.js --filter react --quick  # subset, 1 warmup + 3 iterations
 node run.js --stat min              # rank by fastest iteration (use on a loaded machine)
 node profile.js react/testing-library-form --impl fork-js --top 40
 ```
 
 - Each (impl, scenario) pair runs in its own `node --expose-gc` child process.
-- Each iteration gets an untimed `setup()`, usually a fresh JSDOM, followed by a forced GC. Only `run()` is timed.
+- Each iteration gets an untimed `setup()`, usually a fresh DOM, followed by a forced GC. Only `run()` is timed.
+- Scenarios create DOMs through `ctx.createDom(html, opts)` (`lib/impls.js`), which wraps `new JSDOM(html, opts)` or
+  happy-dom's `new Window({ url, settings })` + `document.write(html)` behind one `{ window, serialize(), close() }`
+  handle. happy-dom windows are closed with `window.happyDOM.close()`.
+- A scenario an impl cannot run declares `unsupported: { impl: reason }` and is reported as N/A. A scenario where an
+  impl runs but gives different results declares `caveats` and is marked `*` in the table.
 - Results go to `results/<timestamp>.json`. Only `results/baseline.json` is committed.
 - `profile.js` uses the in-process inspector Profiler. It samples every 100µs and only during the measured `run()` calls.
 - `profile.js` prints four reports:
   - self time by category (jsdom lib directory or npm package)
   - the top functions by self time
-  - jsdom `src/` functions by inclusive time, counting recursion once
-  - jsdom `src/` files by self time
+  - jsdom `lib/` functions by inclusive time, counting recursion once
+  - jsdom `lib/` files by self time
 
 ## Scenarios
 
@@ -124,16 +130,16 @@ The profiles below were taken with `--impl fork-js`, 4 iterations. Percentages a
 
 ### Parsing: divs, lists, large, and tables innerHTML / `new JSDOM`
 
-parse5's tokenizer and tree builder take only **12–20%** of self time. Most of the cost is jsdom's per-node tree insertion, which the parse5 adapter in `src/jsdom/browser/parser/html.js` triggers for every node.
+parse5's tokenizer and tree builder take only **12–20%** of self time. Most of the cost is jsdom's per-node tree insertion, which the parse5 adapter in `lib/jsdom/browser/parser/html.js` triggers for every node.
 
 | % (large/innerHTML-parse) | function |
 |--:|---|
-| 44% incl | `_insert` `src/jsdom/living/nodes/Node-impl.js:1012` (self 13.6%) |
+| 44% incl | `_insert` `lib/jsdom/living/nodes/Node-impl.js:1012` (self 13.6%) |
 | 9% | GC |
 | 5.3% | `_remove` `Node-impl.js:1202` |
 | 5.1% | `_invalidateCaches` `Node-impl.js:472` |
 | 5.0% / 4.9% | `get parentNode` `Node-impl.js:291`, `getRootNode` `Node-impl.js:367` |
-| 3.7% | `next` `src/jsdom/living/helpers/dom-tree.js:116` |
+| 3.7% | `next` `lib/jsdom/living/helpers/dom-tree.js:116` |
 | 20.6% incl | adapter `insertText` `html.js:139` (`lastChild.data += text` goes through `replaceData`) |
 | 15.5% incl | adapter `createElement` `html.js:60`, then `create-element.js:176` and the generated `setup` |
 | 13.3% incl | `_replaceAll` and `detachNode` → `remove()`: the fragment is built, then every node is moved |
@@ -157,7 +163,7 @@ Causes:
 |--:|---|
 | 36% / 19% | parse5 `serializeElement` `parse5/dist/serializer/index.js:115` |
 | 17–20% | `childrenToArray` `dom-tree.js:140`: the adapter allocates a child array for every node |
-| 9–10% | adapter `getTagName` / `getAttrList` / `getNamespaceURI` `src/jsdom/living/domparsing/parse5-adapter-serialization.js` |
+| 9–10% | adapter `getTagName` / `getAttrList` / `getNamespaceURI` `lib/jsdom/living/domparsing/parse5-adapter-serialization.js` |
 | 5% | `entities` `escapeWithRegex` |
 | 20% (tables) | GC from string concatenation |
 
@@ -170,7 +176,7 @@ There is also a one-off 9.5% for the `document` named-property cache build (`Doc
 
 ### Selectors
 
-- The work splits into `@asamuzakjp/dom-selector` (38–54%) and `src/generated/idl` (25–30%).
+- The work splits into `@asamuzakjp/dom-selector` (38–54%) and `lib/generated/idl` (25–30%).
 - dom-selector works on **wrappers through the public API**, so every attribute or tag check crosses the wrapper boundary. The main costs are:
   - `implForWrapperWithInterface` `utils.js:125` (8–13%)
   - `isHTMLElement` `utility.js:245` (16% in querySelector-many)
@@ -183,7 +189,7 @@ There is also a one-off 9.5% for the `document` named-property cache build (`Doc
 
 ### Events
 
-- bubble-deep: 70% is in `src/jsdom/living/events`. The main costs are:
+- bubble-deep: 70% is in `lib/jsdom/living/events`. The main costs are:
   - `_dispatch` `EventTarget-impl.js:147` (25% self)
   - `invokeEventListeners` and `innerInvokeEventListeners` (25%)
   - Event construction (13%)
@@ -192,7 +198,7 @@ There is also a one-off 9.5% for the `document` named-property cache build (`Doc
 
 ### Style
 
-- computed-style: 95% is in `prepareComputedStyleDeclaration` (`src/jsdom/living/css/helpers/computed-style.js:44`).
+- computed-style: 95% is in `prepareComputedStyleDeclaration` (`lib/jsdom/living/css/helpers/computed-style.js:44`).
 - For every matching rule and declaration, the cascade calls `declaration.setProperty(property, value)` (61% incl). That re-parses the value string with css-tree:
   - `clone`
   - `TokenStream`
@@ -216,7 +222,7 @@ There is also a one-off 9.5% for the `document` named-property cache build (`Doc
 
 ## napi overhead
 
-I measured this with the existing `nativeVersion()` export, so `src/native/` was not changed. The test was 5M calls on an M4 with Node 24:
+I measured this with the existing `nativeVersion()` export, so `native/` was not changed. The test was 5M calls on an M4 with Node 24:
 
 - **about 29ns per call**, including creating the returned JS string
 - 1.6ns for an equivalent JS function
