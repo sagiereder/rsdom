@@ -254,9 +254,9 @@ function postProcessProxyWrapper(file) {
   if (handlerStart === -1) {
     return;
   }
-  const fail = what => {
+  function fail(what) {
     throw new Error(`convert.js: could not post-process ${path.basename(file)}: ${what} not found`);
-  };
+  }
 
   const register = "  utils.registerWrapper(wrapper, impl, undefined);\n";
   if (!source.includes(register)) {
@@ -269,7 +269,8 @@ function postProcessProxyWrapper(file) {
   let proxyRegistrations = 0;
   for (let i = source.indexOf(registerProxy); i !== -1; i = source.indexOf(registerProxy, i + 1)) {
     const at = source.indexOf(proxyRegistration, i);
-    if (at === -1 || source.indexOf(registerProxy, i + 1) !== -1 && source.indexOf(registerProxy, i + 1) < at) {
+    const nextProxy = source.indexOf(registerProxy, i + 1);
+    if (at === -1 || (nextProxy !== -1 && nextProxy < at)) {
       fail("proxy registration");
     }
     source = `${source.slice(0, at)}  utils.registerProxyWrapper(wrapper, impl, $interfaceDescriptor);\n${
