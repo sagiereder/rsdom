@@ -1,4 +1,5 @@
 "use strict";
+/* eslint-disable func-style, @stylistic/max-len */
 // Mocha entry point like test/web-platform-tests/run-wpts.js, but restricted to the WPT directories
 // listed in WPT_DIRS (comma-separated, prefix match). Used by scripts/dev/test.js for sharded/selective runs.
 const path = require("node:path");

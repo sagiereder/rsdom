@@ -1,4 +1,5 @@
 "use strict";
+/* eslint-disable func-style, @stylistic/max-len */
 /* eslint-disable no-console */
 // Fast developer test runner.
 //
@@ -27,22 +28,42 @@ const verbose = flag("--verbose");
 
 // Changed path (regex) -> WPT dirs (prefix match against to-run.yaml DIRs) and whether API tests should run.
 const RELEVANCE = [
-  [/^native\/src\/(html|parse|tokeni|tree_builder)/, ["html/syntax", "domparsing", "html/semantics/scripting-1",
-    "html/webappapis/dynamic-markup-insertion", "dom/nodes", "custom-elements", "shadow-dom"]],
+  [
+    /^native\/src\/(html|parse|tokeni|tree_builder)/, [
+      "html/syntax", "domparsing", "html/semantics/scripting-1",
+      "html/webappapis/dynamic-markup-insertion", "dom/nodes", "custom-elements", "shadow-dom"
+    ]
+  ],
   [/^native\/src\/(css|style|cascade)/, ["css", "html/rendering", "dom/nodes/Element-matches", "html/semantics/selectors"]],
   [/^native\/src\/(select|query)/, ["css/selectors", "dom/nodes", "html/semantics/selectors", "shadow-dom"]],
   [/^native\/src\/(serial)/, ["domparsing", "html/syntax", "dom/nodes", "html/semantics/scripting-1/the-template-element"]],
   [/^native\//, ["dom/nodes", "domparsing", "html/syntax", "html/dom", "css/selectors"]],
-  [/^lib\/jsdom\/browser\/parser\//, ["html/syntax", "domparsing", "html/semantics/scripting-1", "dom/nodes",
-    "html/webappapis/dynamic-markup-insertion", "custom-elements", "shadow-dom", "html/semantics/forms"]],
+  [
+    /^lib\/jsdom\/browser\/parser\//, [
+      "html/syntax", "domparsing", "html/semantics/scripting-1", "dom/nodes",
+      "html/webappapis/dynamic-markup-insertion", "custom-elements", "shadow-dom", "html/semantics/forms"
+    ]
+  ],
   [/^lib\/jsdom\/living\/domparsing\//, ["domparsing", "html/syntax", "dom/nodes", "shadow-dom"]],
-  [/^lib\/jsdom\/living\/css\//, ["css", "html/rendering", "html/semantics/document-metadata/the-style-element",
-    "html/semantics/document-metadata/the-link-element"]],
+  [
+    /^lib\/jsdom\/living\/css\//, [
+      "css", "html/rendering", "html/semantics/document-metadata/the-style-element",
+      "html/semantics/document-metadata/the-link-element"
+    ]
+  ],
   [/^lib\/jsdom\/living\/helpers\/style-rules/, ["css", "html/rendering"]],
-  [/^lib\/jsdom\/living\/helpers\/(selectors|dom-tree|node|create-element|internal-constants)/, ["dom", "css/selectors",
-    "html/semantics/selectors", "shadow-dom", "custom-elements", "domparsing", "html/dom"]],
-  [/^lib\/jsdom\/living\/(nodes|attributes|helpers)\//, ["dom", "html/dom", "shadow-dom", "custom-elements",
-    "domparsing", "html/semantics", "html/syntax", "css/selectors", "css/cssom"]],
+  [
+    /^lib\/jsdom\/living\/helpers\/(selectors|dom-tree|node|create-element|internal-constants)/, [
+      "dom", "css/selectors",
+      "html/semantics/selectors", "shadow-dom", "custom-elements", "domparsing", "html/dom"
+    ]
+  ],
+  [
+    /^lib\/jsdom\/living\/(nodes|attributes|helpers)\//, [
+      "dom", "html/dom", "shadow-dom", "custom-elements",
+      "domparsing", "html/semantics", "html/syntax", "css/selectors", "css/cssom"
+    ]
+  ],
   [/^lib\/jsdom\/living\/events\//, ["dom/events", "html/webappapis", "uievents", "pointerevents", "shadow-dom"]],
   [/^lib\/jsdom\/living\/range\//, ["dom/ranges", "selection"]],
   [/^lib\/jsdom\/living\/traversal\//, ["dom/traversal"]],
@@ -88,7 +109,7 @@ function selectDirs(prefixes, dirs) {
 function shard(dirs, n) {
   const bins = Array.from({ length: n }, () => ({ weight: 0, dirs: [] }));
   for (const d of [...dirs].sort((a, b) => b.weight - a.weight)) {
-    const bin = bins.reduce((a, b) => (a.weight <= b.weight ? a : b));
+    const bin = bins.reduce((a, b) => a.weight <= b.weight ? a : b);
     bin.weight += d.weight;
     bin.dirs.push(d.dir);
   }
@@ -114,7 +135,7 @@ async function ensureServers() {
 function runMocha(label, args, extraEnv = {}) {
   return new Promise(resolve => {
     const start = Date.now();
-    const child = spawn(process.execPath, [path.join(root, "node_modules/mocha/bin/mocha.js"), "--reporter", "dot", ...args], {
+    const child = spawn(process.execPath, [path.join(root, "node_modules/mocha/bin/mocha.js"), "--reporter", "dot", "--exit", ...args], {
       cwd: root,
       env: { ...process.env, JSDOM_WPT_EXTERNAL: "1", FORCE_COLOR: "0", ...extraEnv }
     });
@@ -258,8 +279,10 @@ async function main() {
   }
   console.log(`\nTOTAL: ${total.p} passing, ${total.f} failing, ${total.s} pending in ${((Date.now() - t0) / 1000).toFixed(1)}s` +
     ` (${failed.length} of ${results.length} jobs failed)`);
-  fs.writeFileSync(path.join(os.tmpdir(), "jsdom-dev-test-last.json"),
-    JSON.stringify({ total, failed: failed.map(r => r.label) }, null, 2));
+  fs.writeFileSync(
+    path.join(os.tmpdir(), "jsdom-dev-test-last.json"),
+    JSON.stringify({ total, failed: failed.map(r => r.label) }, null, 2)
+  );
   process.exitCode = failed.length ? 1 : 0;
 }
 
