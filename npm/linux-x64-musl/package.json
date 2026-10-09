@@ -1,0 +1,26 @@
+{
+  "name": "rsdom-linux-x64-musl",
+  "version": "0.1.0",
+  "description": "The x86_64-unknown-linux-musl binary for rsdom, a jsdom fork with a Rust core",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sagiereder/rsdom.git"
+  },
+  "main": "rsdom.linux-x64-musl.node",
+  "files": [
+    "rsdom.linux-x64-musl.node"
+  ],
+  "os": [
+    "linux"
+  ],
+  "cpu": [
+    "x64"
+  ],
+  "libc": [
+    "musl"
+  ],
+  "engines": {
+    "node": "^22.22.2 || ^24.15.0 || >=26.0.0"
+  }
+}

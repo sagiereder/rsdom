@@ -11,3 +11,6 @@ npm-debug.log*
 .wireit
 src/generated/
 src/jsdom/living/css/CSSStyleProperties.webidl
+
+# Prebuilt binaries copied in by scripts/release/platform-packages.js
+npm/*/*.node

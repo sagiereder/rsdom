@@ -1,0 +1,35 @@
+{
+  "name": "vitest-environment-rsdom",
+  "version": "0.1.0",
+  "description": "A Vitest environment backed by rsdom, a jsdom fork with a Rust core: environment: \"rsdom\"",
+  "keywords": [
+    "vitest",
+    "vitest-environment",
+    "jsdom",
+    "rsdom",
+    "dom"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sagiereder/rsdom.git",
+    "directory": "packages/vitest-environment-rsdom"
+  },
+  "main": "./index.js",
+  "exports": {
+    ".": "./index.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js"
+  ],
+  "dependencies": {
+    "rsdom": "0.1.0"
+  },
+  "peerDependencies": {
+    "vitest": ">=3"
+  },
+  "engines": {
+    "node": "^22.22.2 || ^24.15.0 || >=26.0.0"
+  }
+}

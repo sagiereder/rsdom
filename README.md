@@ -17,13 +17,64 @@ jsdom is the DOM behind most JavaScript test runners (Jest, Vitest and Testing L
 - **Incremental live collections.** `getElementsBy*`, `children` and similar live `HTMLCollection`s are invalidated by a mutation journal and updated incrementally instead of being rebuilt after every DOM change. ID lookups go through a cache.
 - **Cheaper bookkeeping.** Event dispatch has a fast path for trees without shadow roots and uses copy-on-write listener lists. Serialization is faster, wrappers are created lazily, and legacy platform-object proxies are cheaper.
 
-## Install and build
+## Install
+
+```sh
+npm install rsdom
+```
+
+npm also installs the prebuilt addon for your platform: macOS (arm64 or x64), Linux (x64 or arm64 with glibc, or x64 with musl) or Windows (x64). It comes from a package such as `rsdom-darwin-arm64`, which rsdom lists as an optional dependency. On other platforms, or with `--omit=optional`, rsdom runs on its pure-JS paths and behaves the same, just slower.
+
+## Use with Jest / Vitest
+
+rsdom ships test environments that mirror `jest-environment-jsdom` and Vitest's built-in `jsdom` environment. Switching only takes a config change. Testing Library, user-event and fake timers work as they do with jsdom.
+
+### Jest
+
+```sh
+npm install --save-dev rsdom
+```
+
+```js
+// jest.config.js
+module.exports = {
+  testEnvironment: "rsdom/jest",
+  // Optional, same as with jest-environment-jsdom: html, url, userAgent, customExportConditions,
+  // or any JSDOM constructor option.
+  testEnvironmentOptions: { url: "http://localhost/" }
+};
+```
+
+`rsdom/jest` uses the `jest-util`, `jest-mock` and `@jest/fake-timers` that come with Jest. If your package manager doesn't hoist them (pnpm, Yarn PnP), install `jest-environment-rsdom` instead, which depends on them directly, and use `testEnvironment: "rsdom"`. A per-file `/** @jest-environment rsdom/jest */` docblock works too.
+
+### Vitest
+
+```sh
+npm install --save-dev rsdom vitest-environment-rsdom
+```
+
+```js
+// vitest.config.js
+import { defineConfig } from "vitest/config";
+
+export default defineConfig({
+  test: {
+    environment: "rsdom",
+    // Optional, the same options as Vitest's jsdom environment. `environmentOptions.jsdom` is read too.
+    environmentOptions: { rsdom: { url: "http://localhost:3000" } }
+  }
+});
+```
+
+Vitest resolves `environment: "rsdom"` to the `vitest-environment-rsdom` package. Without that package, point at the file directly: `environment: "./node_modules/rsdom/src/integrations/vitest.js"`. A per-file `// @vitest-environment rsdom` comment works too. All pools are supported, including `vmThreads` and `vmForks`.
+
+## Build from source
 
 You need Node.js (^22.22.2, ^24.15.0 or >=26) and a [Rust toolchain](https://rustup.rs/) (stable).
 
 ```sh
 npm install
-npm run prepare            # generates the Web IDL wrappers into src/jsdom/living/generated
+npm run prepare            # generates the Web IDL wrappers into src/generated
 node src/native/build.js   # builds the addon to src/native/jsdom-native.node (pass --debug for a debug build)
 ```
 
