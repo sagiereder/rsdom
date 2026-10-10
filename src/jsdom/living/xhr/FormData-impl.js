@@ -63,6 +63,13 @@ exports.implementation = class FormDataImpl {
     }
   }
 
+  // The pair at index in the value pairs to iterate over, or undefined past the end: lets the generated next() and
+  // forEach() read one entry instead of building the whole list at every step.
+  _valuePairAt(index) {
+    const entry = this._entries[index];
+    return entry === undefined ? undefined : [entry.name, idlUtils.tryWrapperForImpl(entry.value)];
+  }
+
   * [Symbol.iterator]() {
     for (const entry of this._entries) {
       yield [entry.name, idlUtils.tryWrapperForImpl(entry.value)];

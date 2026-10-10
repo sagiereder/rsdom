@@ -274,6 +274,21 @@ function cacheSameObject(wrapper, prop, value) {
 
 ${SAME_OBJECT_ORIGINAL}`;
 
+// newObjectInRealm() copies an object into one with the realm's Object.prototype. Its only callers pass iterator result
+// objects, plain objects with enumerable data properties only, for which defining each property directly in an object
+// literal does the same, without going through property descriptor objects (several times faster).
+const NEW_OBJECT_ORIGINAL = `function newObjectInRealm(globalObject, object) {
+  const ctorRegistry = initCtorRegistry(globalObject);
+  return Object.defineProperties(
+    Object.create(ctorRegistry["%Object.prototype%"]),
+    Object.getOwnPropertyDescriptors(object)
+  );
+}`;
+const NEW_OBJECT_REPLACEMENT = `function newObjectInRealm(globalObject, object) {
+  const ctorRegistry = initCtorRegistry(globalObject);
+  return { __proto__: ctorRegistry["%Object.prototype%"], ...object };
+}`;
+
 function postProcessUtils() {
   const utilsPath = path.resolve(outputDir, "utils.js");
   let source = fs.readFileSync(utilsPath, "utf8");
@@ -283,6 +298,7 @@ function postProcessUtils() {
     [WRAPPER_LOOKUP_ORIGINAL, WRAPPER_LOOKUP_REPLACEMENT],
     ["  registerWrapper,\n", "  registerWrapper,\n  registerProxyWrapper,\n"],
     [SAME_OBJECT_ORIGINAL, SAME_OBJECT_REPLACEMENT],
+    [NEW_OBJECT_ORIGINAL, NEW_OBJECT_REPLACEMENT],
     ["  getSameObject,\n", "  getSameObject,\n  cachedSameObject,\n  cacheSameObject,\n"]
   ]) {
     if (!source.includes(original)) {
@@ -871,6 +887,54 @@ ${entries}
   fs.writeFileSync(file, source.slice(0, classStart) + replacement + source.slice(entriesEnd + "\n  });\n".length));
 }
 
+// The next() of a pair iterator (FormData, Headers) recomputed the whole list of value pairs to read the one at the
+// iterator's index, which made iterating n entries cost O(n^2). The list must be read afresh at each step, since it can
+// change during iteration, but an implementation that can look up the pair at an index directly now provides
+// _valuePairAt(index), which returns that pair, or undefined past the end. Others keep the original behavior.
+const PAIR_NEXT_ORIGINAL = `      const { target, kind, index } = internal;
+      const values = Array.from(target);
+      const len = values.length;
+      if (index >= len) {
+        return newObjectInRealm(globalObject, { value: undefined, done: true });
+      }
+
+      const pair = values[index];
+`;
+const PAIR_NEXT_REPLACEMENT = `      const { target, kind, index } = internal;
+      const pair = typeof target._valuePairAt === "function" ? target._valuePairAt(index) : Array.from(target)[index];
+      if (pair === undefined) {
+        return newObjectInRealm(globalObject, { value: undefined, done: true });
+      }
+
+`;
+
+// forEach() likewise rebuilt the list after every callback.
+const PAIR_FOR_EACH_ORIGINAL = `      const thisArg = arguments[1];
+      let pairs = Array.from($impl);
+`;
+const PAIR_FOR_EACH_REPLACEMENT = `      const thisArg = arguments[1];
+      if (typeof $impl._valuePairAt === "function") {
+        for (let i = 0, pair; (pair = $impl._valuePairAt(i)) !== undefined; i++) {
+          const [key, value] = pair.map(utils.tryWrapperForImpl);
+          callback.call(thisArg, value, key, this);
+        }
+        return;
+      }
+      let pairs = Array.from($impl);
+`;
+
+function postProcessPairIterator(file) {
+  let source = fs.readFileSync(file, "utf8");
+  if (!source.includes(PAIR_NEXT_ORIGINAL)) {
+    return;
+  }
+  source = source.replace(PAIR_NEXT_ORIGINAL, PAIR_NEXT_REPLACEMENT);
+  if (!source.includes(PAIR_FOR_EACH_ORIGINAL)) {
+    throw new Error(`convert.js: could not post-process the forEach() of ${file}`);
+  }
+  fs.writeFileSync(file, source.replace(PAIR_FOR_EACH_ORIGINAL, PAIR_FOR_EACH_REPLACEMENT));
+}
+
 function postProcessWrappers() {
   for (const name of fs.readdirSync(outputDir)) {
     if (name.endsWith(".js")) {
@@ -879,6 +943,7 @@ function postProcessWrappers() {
       postProcessStringArguments(file);
       postProcessArgumentArrays(file);
       postProcessSameObject(file);
+      postProcessPairIterator(file);
       postProcessUniformAccessors(file);
       postProcessInterfaceObject(file);
     }
