@@ -60,7 +60,19 @@ async function main() {
     await session.post("Profiler.setSamplingInterval", { interval: Number(args["sampling-us"] ?? 100) });
   }
 
+  // Memory: JS heap + external (ArrayBuffers, native allocations reported to V8) still reachable after run, i.e. what
+  // the document built so far costs while the test holds it, over a baseline taken before the first iteration (after
+  // the impl is loaded and prepare's inputs are built). Read after a macrotask and a full GC, outside the timed region.
+  // (Per-iteration "before" readings would be skewed: a closed window can stay reachable until the next one is made.)
+  const heapNow = async () => {
+    await new Promise(resolve => setImmediate(resolve));
+    gc();
+    const m = process.memoryUsage();
+    return m.heapUsed + m.external;
+  };
+  const baseHeap = await heapNow();
   const times = [];
+  const retained = [];
   const started = Date.now();
   for (let i = 0; i < warmup + iters; i++) {
     const measured = i >= warmup;
@@ -79,6 +91,9 @@ async function main() {
       const { profile } = await session.post("Profiler.stop");
       profiles.push(profile);
     }
+    if (measured) {
+      retained.push(await heapNow() - baseHeap);
+    }
     if (scenario.teardown) {
       await scenario.teardown(state);
     }
@@ -96,9 +111,11 @@ async function main() {
   }
 
   const sorted = [...times].sort((a, b) => a - b);
-  const median = sorted.length % 2 ?
-    sorted[(sorted.length - 1) / 2] :
-    (sorted[sorted.length / 2 - 1] + sorted[sorted.length / 2]) / 2;
+  const medianOf = xs => {
+    const ys = [...xs].sort((a, b) => a - b);
+    return ys.length % 2 ? ys[(ys.length - 1) / 2] : (ys[ys.length / 2 - 1] + ys[ys.length / 2]) / 2;
+  };
+  const median = medianOf(times);
   const result = {
     impl: implName,
     scenario: scenario.name,
@@ -111,7 +128,10 @@ async function main() {
     mean: times.reduce((a, b) => a + b, 0) / times.length,
     // coefficient of variation; > 0.15 suggests interference (other processes, GC pressure)
     cv: Math.sqrt(times.reduce((a, t) => a + (t - median) ** 2, 0) / times.length) / median,
-    rssMB: Math.round(process.memoryUsage().rss / 1048576)
+    rssMB: Math.round(process.memoryUsage().rss / 1048576),
+    // Peak resident set size of the whole worker process (module load, warmups and all iterations).
+    peakRssMB: Math.round(process.resourceUsage().maxRSS / 1024),
+    retainedMB: Math.max(0, medianOf(retained)) / 1048576
   };
   process.stdout.write(`\n${MARKER}${JSON.stringify(result)}\n`);
   // DOM windows/react may leave handles open; exit explicitly.
