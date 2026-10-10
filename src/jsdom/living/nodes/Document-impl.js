@@ -233,6 +233,8 @@ class DocumentImpl extends NodeImpl {
     // "fully active": an inactive document need not be destroyed.
     // https://html.spec.whatwg.org/multipage/document-lifecycle.html#destroy-a-document
     this._isDestroyed = false;
+    // Holder for the window's initial load-event tick; see createWindow() in browser/Window.js.
+    this._pendingLoadTick = null;
     this._childDocuments = new Set();
     this._parentDocument = null;
     this._currentDocumentReadiness = readyState;
