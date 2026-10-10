@@ -20,7 +20,15 @@ const AREAS = [
   ["Selectors", ["selectors"]],
   ["Events and style", ["events", "style"]],
   ["React", ["react"]],
-  ["React (production build)", ["react-prod"]]
+  ["React (production build)", ["react-prod"]],
+  ["Accessibility queries and user-event", ["a11y"]],
+  ["Web components", ["webcomponents"]],
+  ["Mutation observers", ["mutation"]],
+  ["Template rendering", ["template"]],
+  ["Forms", ["forms"]],
+  ["Window startup", ["startup"]],
+  ["Real page parsing", ["parse"]],
+  ["XML and SVG", ["xml"]]
 ];
 
 function parseArgs(argv) {

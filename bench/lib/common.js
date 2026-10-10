@@ -58,4 +58,16 @@ function installGlobals(window) {
   globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 }
 
-module.exports = { rng, freshDom, installGlobals };
+// Correctness check for scenario results: throws (failing the run, reported as ERR) when actual !== expected, so a
+// fast-but-wrong implementation cannot post a time. `expected` may be a per-impl map { default, [impl]: value } for
+// results where an impl knowingly diverges (such scenarios also declare a caveat).
+function check(actual, expected, what, impl) {
+  const want = expected !== null && typeof expected === "object" ?
+    (impl in expected ? expected[impl] : expected.default) :
+    expected;
+  if (actual !== want) {
+    throw new Error(`${what}: got ${JSON.stringify(actual)}, expected ${JSON.stringify(want)}${impl ? ` (${impl})` : ""}`);
+  }
+}
+
+module.exports = { rng, freshDom, installGlobals, check };
