@@ -151,6 +151,8 @@ const numericTokenRegEx = /^([+-]?)(\d+|\d*\.\d+)(%|[a-z]+)?$/i;
 const hexHashTokenRegEx = /^#[\da-f]+$/i;
 const identTokenRegEx = /^-?[a-z_][\w-]*$/i;
 const cssWhitespaceRegEx = /[ \t\n\r\f]+/;
+// Values containing any other character are rejected up front, without splitting them.
+const tokenSequenceCharsRegEx = /^[\w#.%+\-/, \t\n\r\f]+$/;
 const TOKEN_CLASS_LIMIT = 8192;
 const tokenClassValidity = new Map();
 let tokenClassSyntaxInfo = null;
@@ -277,6 +279,9 @@ function classifyToken(token, caseSensitive, nodes) {
 
 // Returns { key, nodes } for a value supported by the fast path, or null.
 function classifyTokens(val, caseSensitive) {
+  if (!tokenSequenceCharsRegEx.test(val)) {
+    return null;
+  }
   const tokens = cssWhitespaceRegEx.test(val) ? val.split(cssWhitespaceRegEx) : [val];
   if (tokens.length === 1) {
     // A lone identifier (e.g. a keyword or a global keyword) is left to the regular path and its cache.
@@ -960,7 +965,7 @@ function serializeColor(val, opt = { format: "specifiedValue" }) {
   const lowerCasedName = asciiLowercase(`${name}`);
   switch (type) {
     case AST_TYPES.FUNCTION: {
-      const res = resolveColorMemoized(`${lowerCasedName}(${value})`, opt);
+      const res = resolveColor(`${lowerCasedName}(${value})`, opt);
       if (res) {
         return res;
       }
