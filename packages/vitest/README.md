@@ -28,4 +28,4 @@ import { fileURLToPath } from "node:url";
 environment: fileURLToPath(import.meta.resolve("@rsdom/vitest")),
 ```
 
-The `// @vitest-environment` comment only accepts names (letters, digits, `_` and `-`), so it can't select this environment for one file. All pools are supported, including `vmThreads` and `vmForks`.
+To use `environment: "rsdom"` (or a per-file `// @vitest-environment rsdom` comment) instead of a path, install [vitest-environment-rsdom](https://www.npmjs.com/package/vitest-environment-rsdom), the same environment under the name Vitest resolves. All pools are supported, including `vmThreads` and `vmForks`.

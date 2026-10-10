@@ -4,7 +4,7 @@ name: Release
 # scripts/release/platforms.js and publishes:
 #   - @rsdom/core-<platform> (npm/<platform>/), one per prebuilt binary;
 #   - @rsdom/core, with those packages added as optionalDependencies;
-#   - @rsdom/jest and @rsdom/vitest (packages/jest/, packages/vitest/).
+#   - @rsdom/jest, @rsdom/vitest and vitest-environment-rsdom (packages/*/).
 # Running the workflow by hand builds everything and does a `npm publish --dry-run` rehearsal instead.
 # Publishing uses npm trusted publishing (OIDC): no token secret. Every package must have a trusted publisher for
 # sagiereder/rsdom + release.yml (scripts/release/bootstrap-trusted-publishing.sh sets that up once).
@@ -165,3 +165,4 @@ jobs:
           publish .
           publish packages/jest
           publish packages/vitest
+          publish packages/vitest-environment-rsdom

@@ -54,7 +54,7 @@ module.exports = {
 ### Vitest
 
 ```sh
-npm install --save-dev @rsdom/vitest
+npm install --save-dev vitest-environment-rsdom
 ```
 
 ```js
@@ -63,23 +63,16 @@ import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   test: {
-    environment: "./node_modules/@rsdom/vitest",
+    environment: "rsdom",
     // Optional, the same options as Vitest's jsdom environment. `environmentOptions.jsdom` is read too.
     environmentOptions: { rsdom: { url: "http://localhost:3000" } }
   }
 });
 ```
 
-Use the path, not `environment: "@rsdom/vitest"`. Vitest resolves a name that isn't built in only as the package `vitest-environment-<name>`, so a scoped package can't be given by name. A value that starts with `.` or `/` is loaded as a file, relative to the project root. If `@rsdom/vitest` isn't installed in the project root's `node_modules` (a workspace package with dependencies hoisted to the repository root, or Yarn PnP), resolve it instead:
+A per-file `// @vitest-environment rsdom` comment works too. All pools are supported, including `vmThreads` and `vmForks`.
 
-```js
-import { fileURLToPath } from "node:url";
-
-// in test: { ... }
-environment: fileURLToPath(import.meta.resolve("@rsdom/vitest")),
-```
-
-Without `@rsdom/vitest`, point at the environment inside `@rsdom/core`: `environment: "./node_modules/@rsdom/core/src/integrations/vitest.js"`. Vitest's per-file `// @vitest-environment` comment only accepts names, so it can't select rsdom for a single file. All pools are supported, including `vmThreads` and `vmForks`.
+The same environment is published as `@rsdom/vitest`. Vitest resolves a name that isn't built in only as the package `vitest-environment-<name>`, so the scoped package has to be given as a path: `environment: "./node_modules/@rsdom/vitest"`. Without either package, point at the copy inside `@rsdom/core`: `environment: "./node_modules/@rsdom/core/src/integrations/vitest.js"`.
 
 ## Build from source
 

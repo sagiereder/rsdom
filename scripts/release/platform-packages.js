@@ -4,8 +4,8 @@
 //
 //   node scripts/release/platform-packages.js sync
 //       Rewrites every npm/<platform>/package.json from scripts/release/platforms.js, at the root package's version,
-//       and moves the packages/* wrappers (@rsdom/jest, @rsdom/vitest) and their @rsdom/core dependency to that
-//       version. Run it after bumping the version.
+//       and moves the packages/* wrappers (@rsdom/jest, @rsdom/vitest, vitest-environment-rsdom) and their
+//       @rsdom/core dependency to that version. Run it after bumping the version.
 //   node scripts/release/platform-packages.js prepublish
 //       Adds the platform packages to the root package.json's optionalDependencies, at the root version. CI runs this
 //       just before `npm publish`. It is not committed: until a version's platform packages exist on the registry,
