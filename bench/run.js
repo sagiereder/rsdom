@@ -1,7 +1,7 @@
 "use strict";
 // Benchmark driver. Every (impl, scenario) pair runs in a fresh child process (worker.js).
 //
-//   node run.js                       upstream jsdom@30.1.2 vs fork-js vs fork (native on) vs happy-dom
+//   node run.js                       upstream jsdom@30.1.2 vs fork (native on) vs happy-dom
 //   node run.js --mode upstream       upstream vs fork
 //   node run.js --mode native         fork-js (JSDOM_NATIVE=0) vs fork (native on)
 //   node run.js --mode happy          happy-dom vs fork
@@ -43,7 +43,7 @@ function parseArgs(argv) {
 const MODES = {
   upstream: ["upstream", "fork"],
   native: ["fork-js", "fork"],
-  all: ["upstream", "fork-js", "fork", "happy-dom"],
+  all: ["upstream", "fork", "happy-dom"],
   happy: ["happy-dom", "fork"]
 };
 
@@ -96,7 +96,7 @@ function main() {
   const opts = {
     warmup: Number(args.warmup ?? (quick ? 1 : 3)),
     iters: Number(args.iters ?? (quick ? 3 : 10)),
-    budgetMs: Number(args["budget-ms"] ?? (quick ? 8000 : 30000))
+    budgetMs: Number(args["budget-ms"] ?? (quick ? 8000 : 15000))
   };
   const stat = args.stat === "min" ? "min" : "median";
   const filters = args.filter ? String(args.filter).split(",") : null;

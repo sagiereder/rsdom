@@ -1,7 +1,7 @@
 "use strict";
 // Runs ONE scenario against ONE impl in this process and prints a JSON result line.
 //   node --expose-gc worker.js --impl fork --scenario divs/innerHTML [--warmup 3] [--iters 10]
-//        [--budget-ms 30000] [--profile out.json] [--sampling-us 100]
+//        [--budget-ms 15000] [--profile out.json] [--sampling-us 100]
 const fs = require("node:fs");
 const { IMPLS, createDomFactory, nativeLoaded } = require("./lib/impls.js");
 
@@ -37,7 +37,9 @@ async function main() {
   }
   const warmup = Number(args.warmup ?? 3);
   const iters = Number(args.iters ?? 10);
-  const budgetMs = Number(args["budget-ms"] ?? 30000);
+  const budgetMs = Number(args["budget-ms"] ?? 15000);
+  // Memory readings (a macrotask plus a full GC each) are taken on the first few timed iterations only.
+  const memoryIters = 3;
   const gc = typeof globalThis.gc === "function" ? globalThis.gc : () => {};
 
   if (scenario.unsupported && scenario.unsupported[implName]) {
@@ -47,6 +49,9 @@ async function main() {
     process.exit(0);
   }
 
+  // The time budget covers prepare and warmups too: slow scenarios stop warming up (after at least one warmup) once half
+  // of it is spent, and stop measuring (after at least three iterations) once all of it is.
+  const started = Date.now();
   const ctx = { impl: implName, createDom: createDomFactory(implName) };
   const shared = scenario.prepare ? await scenario.prepare(ctx) : undefined;
 
@@ -73,8 +78,11 @@ async function main() {
   const baseHeap = await heapNow();
   const times = [];
   const retained = [];
-  const started = Date.now();
+  let warmed = 0;
   for (let i = 0; i < warmup + iters; i++) {
+    if (i < warmup && warmed >= 1 && Date.now() - started > budgetMs / 2) {
+      i = warmup;
+    }
     const measured = i >= warmup;
     const state = scenario.setup ? await scenario.setup(ctx, shared) : {};
     gc();
@@ -91,13 +99,15 @@ async function main() {
       const { profile } = await session.post("Profiler.stop");
       profiles.push(profile);
     }
-    if (measured) {
+    if (measured && retained.length < memoryIters) {
       retained.push(await heapNow() - baseHeap);
     }
     if (scenario.teardown) {
       await scenario.teardown(state);
     }
-    if (measured) {
+    if (!measured) {
+      warmed++;
+    } else {
       times.push(Number(t1 - t0) / 1e6);
       if (times.length >= 3 && Date.now() - started > budgetMs) {
         break;
@@ -120,7 +130,7 @@ async function main() {
     impl: implName,
     scenario: scenario.name,
     native: nativeLoaded(implName),
-    warmup,
+    warmup: warmed,
     times,
     median,
     min: sorted[0],

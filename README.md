@@ -106,13 +106,15 @@ The benchmarks in `bench/` compare rsdom with the published jsdom 30.1.2 and [ha
 
 ```sh
 cd bench && npm install
-node run.js                         # upstream jsdom vs rsdom, writes results/<timestamp>.json
-node run.js --impls upstream,fork-js,fork,happy-dom --stat min   # the run behind the table below
+node run.js --stat min              # jsdom vs rsdom vs happy-dom, the run behind the table below; writes results/<timestamp>.json
+node run.js --mode upstream         # jsdom vs rsdom only
 node run.js --mode happy            # happy-dom vs rsdom
 node run.js --quick --filter selectors
 node run.js --mode native           # rsdom with JSDOM_NATIVE=0 vs rsdom
 node report.js                      # rewrite the table below from the newest results file
 ```
+
+Each scenario runs 3 warmups and up to 10 timed iterations within a 15-second budget per implementation (covering setup and warmups; at least 1 warmup and 3 timed iterations always run), and memory is read on the first 3 timed iterations. A full run takes about an hour and a half; `--quick` takes a few minutes.
 
 ## Benchmark results
 
