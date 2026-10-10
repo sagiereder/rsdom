@@ -57,48 +57,6 @@ function nextShapeNode(node, property, important) {
   return next;
 }
 
-// Memoization of border setter results; see _borderSetter().
-const BORDER_CACHE_LIMIT = 4096;
-const borderStates = new Map();
-const borderTransitions = new Map();
-let borderStateGeneration = 0;
-let nextBorderStateId = 0;
-
-function resetBorderCaches() {
-  borderStates.clear();
-  borderTransitions.clear();
-  borderStateGeneration++;
-}
-
-/**
- * Returns a string that uniquely identifies a border setter value, or null if the value can't be keyed.
- *
- * @param {string|Array|object} value - The value passed to _borderSetter.
- * @returns {string|null} The key.
- */
-function borderValueKey(value) {
-  if (typeof value === "string") {
-    return `s${value}`;
-  }
-  if (Array.isArray(value)) {
-    for (const item of value) {
-      if (typeof item !== "string") {
-        return null;
-      }
-    }
-    return `a${JSON.stringify(value)}`;
-  }
-  if (value !== null && typeof value === "object" && Object.getPrototypeOf(value) === Object.prototype) {
-    for (const key of Object.keys(value)) {
-      if (typeof value[key] !== "string") {
-        return null;
-      }
-    }
-    return `o${JSON.stringify(value)}`;
-  }
-  return null;
-}
-
 class CSSStyleDeclarationImpl {
   // https://drafts.csswg.org/cssom/#css-declaration-blocks
   // `_priorities` and `#values` together represent the spec's "declarations".
@@ -120,9 +78,6 @@ class CSSStyleDeclarationImpl {
   #computedValueOpts = new Map();
   #cachedPropertyValues = new Map();
   #cachedCssText = null;
-  // Interned id of the current border properties state; only valid if the generation matches.
-  #borderStateId = -1;
-  #borderStateGeneration = -1;
 
   constructor(globalObject, args, { computed, ownerNode, parentRule } = {}) {
     this._globalObject = globalObject;
@@ -142,11 +97,9 @@ class CSSStyleDeclarationImpl {
     this.#serializedPropertyList = null;
     this.#shapeNode = null;
     this.#cachedCssText = null;
-    this.#borderStateId = -1;
   }
 
   _copyDeclarationsFrom(source) {
-    this.#borderStateId = -1;
     this.#serializedPropertyList = null;
     this.#shapeNode = null;
     for (const [property, value] of source.#values) {
@@ -222,7 +175,6 @@ class CSSStyleDeclarationImpl {
     this.#cachedCssText = null;
     this.#values.clear();
     this._priorities.clear();
-    this.#borderStateId = -1;
     this.#serializedPropertyList = null;
     this.#shapeNode = shapeRoot;
     this.#updating = true;
@@ -430,9 +382,6 @@ class CSSStyleDeclarationImpl {
     this._priorities.delete(property);
     this.#serializedPropertyList = null;
     this.#shapeNode = null;
-    if (borderProperties.has(property)) {
-      this.#borderStateId = -1;
-    }
     this.#notifyChange();
     return prevValue;
   }
@@ -562,9 +511,6 @@ class CSSStyleDeclarationImpl {
 
     this.#cachedCssText = null;
     this.#values.set(property, value);
-    if (borderProperties.has(property)) {
-      this.#borderStateId = -1;
-    }
 
     if (this.#updating) {
       this.#pendingStyleUpdate = true;
@@ -887,22 +833,6 @@ class CSSStyleDeclarationImpl {
     if (typeof priority !== "string") {
       priority = this._priorities.get(property) ?? "";
     }
-    // prepareBorderProperties() is a pure function of its arguments, and the border properties are only modified by
-    // border setters. So the updates made here are fully determined by the current border state plus the arguments,
-    // and can be memoized as transitions between interned border states.
-    const valueKey = borderValueKey(value);
-    const stateId = valueKey === null ? -1 : this.#getBorderStateId();
-    const cacheKey = stateId === -1 ? null : `${stateId}\u0000${property}\u0000${priority}\u0000${valueKey}`;
-    const transition = cacheKey === null ? undefined : borderTransitions.get(cacheKey);
-    if (transition !== undefined) {
-      const { updates } = transition;
-      for (let i = 0; i < updates.length; i += 3) {
-        this._setProperty(updates[i], updates[i + 1], updates[i + 2]);
-      }
-      this.#borderStateId = transition.next;
-      this.#borderStateGeneration = borderStateGeneration;
-      return;
-    }
     const properties = new Map();
     if (property === "border") {
       properties.set(property, { property, value, priority });
@@ -924,41 +854,9 @@ class CSSStyleDeclarationImpl {
       }
     }
     const parsedProperties = prepareBorderProperties(property, value, priority, properties);
-    const updates = [];
     for (const [itemProperty, item] of parsedProperties) {
-      updates.push(itemProperty, item.value, item.priority);
+      this._setProperty(itemProperty, item.value, item.priority);
     }
-    for (let i = 0; i < updates.length; i += 3) {
-      this._setProperty(updates[i], updates[i + 1], updates[i + 2]);
-    }
-    if (cacheKey !== null) {
-      if (borderTransitions.size >= BORDER_CACHE_LIMIT || borderStates.size >= BORDER_CACHE_LIMIT) {
-        resetBorderCaches();
-        return;
-      }
-      const next = this.#getBorderStateId();
-      borderTransitions.set(cacheKey, { updates, next });
-    }
-  }
-
-  #getBorderStateId() {
-    if (this.#borderStateGeneration === borderStateGeneration && this.#borderStateId !== -1) {
-      return this.#borderStateId;
-    }
-    let key = "";
-    for (const [property, value] of this.#values) {
-      if (borderProperties.has(property)) {
-        key += `${property}\u0000${this._priorities.get(property) ?? ""}\u0000${value}\u0001`;
-      }
-    }
-    let id = borderStates.get(key);
-    if (id === undefined) {
-      id = nextBorderStateId++;
-      borderStates.set(key, id);
-    }
-    this.#borderStateId = id;
-    this.#borderStateGeneration = borderStateGeneration;
-    return id;
   }
 
   /**
