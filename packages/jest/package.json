@@ -1,6 +1,6 @@
 {
   "name": "@rsdom/jest",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "A Jest test environment backed by rsdom, a jsdom fork with a Rust core: testEnvironment: \"@rsdom/jest\"",
   "keywords": [
     "jest",
@@ -29,7 +29,7 @@
   "dependencies": {
     "@jest/environment": "^30.0.0",
     "@jest/fake-timers": "^30.0.0",
-    "@rsdom/core": "0.1.0",
+    "@rsdom/core": "0.1.1",
     "jest-mock": "^30.0.0",
     "jest-util": "^30.0.0"
   },

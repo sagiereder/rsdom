@@ -1,6 +1,6 @@
 {
   "name": "@rsdom/core",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "A drop-in, API-compatible fork of jsdom with a Rust core for its hot paths",
   "keywords": [
     "dom",

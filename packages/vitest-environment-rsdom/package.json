@@ -1,6 +1,6 @@
 {
   "name": "vitest-environment-rsdom",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Use rsdom (a jsdom fork with a Rust core) in Vitest with environment: \"rsdom\"",
   "keywords": [
     "vitest",
@@ -27,7 +27,7 @@
     "access": "public"
   },
   "dependencies": {
-    "@rsdom/core": "0.1.0"
+    "@rsdom/core": "0.1.1"
   },
   "peerDependencies": {
     "vitest": ">=3"

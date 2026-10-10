@@ -1,6 +1,6 @@
 {
   "name": "@rsdom/core-linux-x64-musl",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "The x86_64-unknown-linux-musl binary for rsdom, a jsdom fork with a Rust core",
   "license": "MIT",
   "repository": {

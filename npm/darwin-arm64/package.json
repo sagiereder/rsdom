@@ -1,6 +1,6 @@
 {
   "name": "@rsdom/core-darwin-arm64",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "The aarch64-apple-darwin binary for rsdom, a jsdom fork with a Rust core",
   "license": "MIT",
   "repository": {
