@@ -15,6 +15,10 @@
 const { HTML_NS, XML_NS } = require("../namespaces");
 const { parseSelectorList } = require("./parser");
 const { findAttributeByName } = require("../../attributes");
+const {
+  createHTMLCollectionByClassNames,
+  createHTMLCollectionByNamespaceAndLocalName
+} = require("../html-collections");
 
 const ELEMENT_NODE = 1;
 const TEXT_NODE = 3;
@@ -880,31 +884,77 @@ function anchorSearch(compiled, root, first, out) {
   return true;
 }
 
+// Seed collections that querySelectorAll builds for itself are memoized on the root, next to the getElementsBy*()
+// collections (so subtree mutations discard them the same way), but only the SEED_LIMIT most recently used ones in each
+// document are kept. Querying many roots, or with many distinct classes, therefore doesn't retain a collection for each
+// (root, class or tag) pair, while repeated queries keep reusing theirs.
+const SEED_LIMIT = 64;
+
 // Returns a live HTMLCollection impl that is a superset of the elements matching compound `c` under `root`, or null.
 // For querySelector (`first`), building a collection would defeat the early exit, so only an already-memoized,
 // up-to-date collection is used.
 function seedFor(root, c, first) {
   const memo = root._getMemoizedQueries();
-  let coll;
+  let coll, key;
   if (c.classes.length > 0) {
     const name = c.classes[0];
-    if (first) {
-      coll = memo.collectionsByClassNames?.get(name);
-    } else {
-      coll = root.getElementsByClassName(name);
-    }
+    coll = memo.collectionsByClassNames?.get(name);
+    key = `.${name}`;
   } else if (c.tag !== null && c.tag === c.tagLower) {
-    if (first) {
-      coll = memo.collectionsByNamespaceAndLocalName?.get("*")?.get(c.tag);
-    } else {
-      coll = root.getElementsByTagNameNS("*", c.tag);
-    }
+    coll = memo.collectionsByNamespaceAndLocalName?.get("*")?.get(c.tag);
+    key = `<${c.tag}`;
+  } else {
+    return null;
+  }
+  if (coll === undefined) {
+    coll = seedCollection(root, memo, key, first);
   }
   if (coll === undefined || (first && coll._version < root._version)) {
     return null;
   }
   coll._update();
   return coll._list;
+}
+
+// Returns the seed collection for `key` (see seedFor()) memoized on `root`, creating it unless `first`.
+function seedCollection(root, memo, key, first) {
+  const document = root._ownerDocument;
+  let seeds = memo.seedCollections;
+  let coll = seeds?.get(key);
+  if (coll !== undefined) {
+    // Mark as most recently used.
+    const recent = document._selectorSeeds;
+    const entry = recent.get(coll);
+    recent.delete(coll);
+    recent.set(coll, entry);
+    return coll;
+  }
+  if (first) {
+    return undefined;
+  }
+
+  const name = key.slice(1);
+  coll = key[0] === "." ?
+    createHTMLCollectionByClassNames(name, root) :
+    createHTMLCollectionByNamespaceAndLocalName("*", name, root);
+  if (seeds === null) {
+    seeds = new Map();
+    memo.seedCollections = seeds;
+  }
+  seeds.set(key, coll);
+
+  // Entries whose memo has since been discarded linger until they are the least recently used; that is bounded too.
+  document._selectorSeeds ??= new Map();
+  const recent = document._selectorSeeds;
+  recent.set(coll, { seeds, key });
+  if (recent.size > SEED_LIMIT) {
+    const [oldest, { seeds: oldSeeds, key: oldKey }] = recent.entries().next().value;
+    recent.delete(oldest);
+    if (oldSeeds.get(oldKey) === oldest) {
+      oldSeeds.delete(oldKey);
+    }
+  }
+  return coll;
 }
 
 function searchUnder(list, root, first, out) {

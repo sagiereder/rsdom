@@ -192,6 +192,9 @@ class DocumentImpl extends NodeImpl {
     this._byIdCache = new ByIdCache(this);
     // Created on demand by live collections; see ../helpers/mutation-journal.js.
     this._mutationJournal = null;
+    // The querySelectorAll() seed collections kept for this document's nodes, least recently used first; see
+    // ../helpers/selectors/engine.js.
+    this._selectorSeeds = null;
     this._isInDocumentTree = true;
     this._currentScript = null;
     this._pageShowingFlag = false;

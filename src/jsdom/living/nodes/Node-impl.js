@@ -122,6 +122,8 @@ function createMemoizedQueries() {
     collectionsByClassNames: null,
     collectionsByQualifiedName: null,
     collectionsByNamespaceAndLocalName: null,
+    // Collections querySelectorAll() built for itself; see ../helpers/selectors/engine.js.
+    seedCollections: null,
     labelAssociations: null
   };
 }
