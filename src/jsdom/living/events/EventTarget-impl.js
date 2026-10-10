@@ -179,8 +179,10 @@ class EventTargetImpl {
       targetImpl._globalObject._document :
       targetImpl;
     // Without any shadow roots, retargeting never changes a target, nothing is in a shadow tree or assigned to a slot,
-    // and every node on the event path is an ancestor of the target, so it is in the target's tree.
-    const { shadowRoots } = fastPathFlags;
+    // and every node on the event path is an ancestor of the target, so it is in the target's tree. The event path
+    // stays within the target's node document (and its window), but the related target may be in another document.
+    const shadowRoots = fastPathFlags.mayBeInShadowTree(targetImpl) ||
+      fastPathFlags.mayBeInShadowTree(eventImpl.relatedTarget);
     let relatedTarget = shadowRoots ? retarget(eventImpl.relatedTarget, targetImpl) : eventImpl.relatedTarget;
 
     if (!shadowRoots) {
@@ -576,7 +578,7 @@ function appendToEventPath(
   touchTargets,
   slotInClosedTree
 ) {
-  const { shadowRoots } = fastPathFlags;
+  const shadowRoots = fastPathFlags.mayBeInShadowTree(invocationTarget);
   const itemInShadowTree = shadowRoots && isNode(invocationTarget) && isShadowRoot(invocationTarget.getRootNode());
   const rootOfClosedTree = shadowRoots && isShadowRoot(invocationTarget) && invocationTarget.mode === "closed";
   const previousStruct = eventImpl._path[eventImpl._path.length - 1];

@@ -51,6 +51,7 @@ const NodeIterator = require("../../../generated/idl/NodeIterator");
 const ShadowRoot = require("../../../generated/idl/ShadowRoot");
 const Range = require("../../../generated/idl/Range");
 const documents = require("../documents.js");
+const fastPathFlags = require("../helpers/fast-path-flags");
 
 const BeforeUnloadEvent = require("../../../generated/idl/BeforeUnloadEvent");
 const CompositionEvent = require("../../../generated/idl/CompositionEvent");
@@ -179,6 +180,7 @@ class DocumentImpl extends NodeImpl {
     this._initGlobalEvents();
 
     this._ownerDocument = this;
+    fastPathFlags.initDocument(this);
     this.nodeType = NODE_TYPE.DOCUMENT_NODE;
     this._parsingMode = parsingMode;
 
@@ -1154,6 +1156,7 @@ class DocumentImpl extends NodeImpl {
     }
 
     if (oldDocument !== newDocument) {
+      fastPathFlags.adopt(oldDocument, newDocument);
       for (const inclusiveDescendant of node._shadowIncludingInclusiveDescendants()) {
         inclusiveDescendant._ownerDocument = newDocument;
 

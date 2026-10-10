@@ -19,7 +19,6 @@ const NodeList = require("../../../generated/idl/NodeList");
 
 const treeHelpers = require("../helpers/dom-tree");
 const { LINK_ELEMENT, LINK_STEPS, LINK_CUSTOM_ELEMENT, LINK_ID_OR_NAME, LINK_VERSION_OBSERVED } = treeHelpers;
-const fastPathFlags = require("../helpers/fast-path-flags");
 const windowProperties = require("../window-properties");
 const { isNamedPropertyElement } = require("../helpers/document-named-properties");
 const { queueTreeMutationRecord } = require("../helpers/mutation-observers");
@@ -133,7 +132,8 @@ function isHostInclusiveAncestor(nodeImplA, nodeImplB) {
   if (nodeImplA === nodeImplB) {
     return true;
   }
-  if (!fastPathFlags.shadowRoots && (nodeImplA._links?.firstChild ?? null) === null &&
+  // A host's node document has its shadow roots flag set.
+  if (!nodeImplA._ownerDocument._shadowRootsUsed && (nodeImplA._links?.firstChild ?? null) === null &&
     nodeImplA._templateContents === undefined) {
     return false;
   }
@@ -470,11 +470,11 @@ class NodeImpl extends EventTargetImpl {
   // https://dom.spec.whatwg.org/#dom-node-isconnected
   get isConnected() {
     // `_isInDocumentTree` is exact for nodes outside shadow trees, and no node is in a shadow tree until a shadow root
-    // has been created.
+    // has been created in its node document.
     if (this._isInDocumentTree) {
       return true;
     }
-    if (!fastPathFlags.shadowRoots) {
+    if (!this._ownerDocument._shadowRootsUsed) {
       return false;
     }
     const root = shadowIncludingRoot(this);
@@ -540,7 +540,7 @@ class NodeImpl extends EventTargetImpl {
       }
     }
 
-    if (this._isInDocumentTree || (fastPathFlags.shadowRoots && this.isConnected)) {
+    if (this._isInDocumentTree || (document._shadowRootsUsed && this.isConnected)) {
       document._clearStyleCache();
     }
   }
@@ -1141,7 +1141,7 @@ class NodeImpl extends EventTargetImpl {
       // connected: `_remove()` skips `disconnectSubtree()` for it, and it skips `connectSubtree()` below.
       let staysConnected = false;
       if (node._ownerDocument !== ownerDocument || node.parentNode !== null) {
-        if (!fastPathFlags.shadowRoots && this._isInDocumentTree && node._isInDocumentTree &&
+        if (!ownerDocument._shadowRootsUsed && this._isInDocumentTree && node._isInDocumentTree &&
             node._ownerDocument === ownerDocument && canMoveConnected(node)) {
           staysConnected = true;
           keepConnectedNode = node;
@@ -1156,8 +1156,9 @@ class NodeImpl extends EventTargetImpl {
         treeHelpers.insertBefore(childImpl, node);
       }
 
-      // Without any shadow roots, slots never have assigned nodes and every root is a light-tree root.
-      const { shadowRoots } = fastPathFlags;
+      // Without any shadow roots, slots never have assigned nodes and every root is a light-tree root. `node` has
+      // been adopted into this node's document by now, carrying its flags over.
+      const shadowRoots = this._ownerDocument._shadowRootsUsed;
       if (
         shadowRoots &&
         (this.nodeType === NODE_TYPE.ELEMENT_NODE && this._shadowRoot !== null) &&
@@ -1196,7 +1197,7 @@ class NodeImpl extends EventTargetImpl {
 
       updateRadioButtonGroupsForTreeChange(node, this);
 
-      if (fastPathFlags.shadowRoots) {
+      if (this._ownerDocument._shadowRootsUsed) {
         for (const inclusiveDescendant of node._shadowIncludingInclusiveDescendants()) {
           runInsertionStepsFor(inclusiveDescendant);
         }
@@ -1242,10 +1243,10 @@ class NodeImpl extends EventTargetImpl {
     postConnectionNodes = undefined;
 
     // Post-connection steps only run for connected nodes, and without shadow trees none are when the parent is not.
-    const walkedCount = fastPathFlags.shadowRoots || this._isInDocumentTree ? count : 0;
+    const walkedCount = this._ownerDocument._shadowRootsUsed || this._isInDocumentTree ? count : 0;
     for (let i = 0; i < walkedCount; i++) {
       const node = nodesImpl === null ? nodeImpl : nodesImpl[i];
-      if (fastPathFlags.shadowRoots) {
+      if (this._ownerDocument._shadowRootsUsed) {
         for (const inclusiveDescendant of node._shadowIncludingInclusiveDescendants()) {
           if (inclusiveDescendant._postConnectionSteps) {
             postConnectionNodes ||= [];
@@ -1353,9 +1354,9 @@ class NodeImpl extends EventTargetImpl {
 
     // Without shadow roots slots have no assigned nodes, and without ranges there is nothing to update, so the
     // descendant walk can be skipped entirely.
-    const { shadowRoots } = fastPathFlags;
+    const { _shadowRootsUsed: shadowRoots, _rangesUsed: ranges } = this._ownerDocument;
     for (
-      let descendant = shadowRoots || fastPathFlags.ranges ? nodeImpl : null;
+      let descendant = shadowRoots || ranges ? nodeImpl : null;
       descendant !== null;
       descendant = treeHelpers.nextInTree(descendant, nodeImpl)
     ) {
@@ -1452,7 +1453,7 @@ class NodeImpl extends EventTargetImpl {
       enqueueCECallbackReaction(nodeImpl, "disconnectedCallback", []);
     }
 
-    if (fastPathFlags.shadowRoots) {
+    if (this._ownerDocument._shadowRootsUsed) {
       for (const descendantImpl of nodeImpl._shadowIncludingDescendants()) {
         descendantImpl._removingSteps(false, this);
         if (descendantImpl._ceState === "custom" && isParentConnected) {
