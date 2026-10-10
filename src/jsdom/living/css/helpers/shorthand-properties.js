@@ -77,6 +77,27 @@ const borderLines = new Set([WIDTH, STYLE, COLOR]);
 
 const borderPositions = new Set([TOP, RIGHT, BOTTOM, LEFT]);
 
+// Precomputed "border-<a>" and "border-<a>-<b>" names, so the border helpers reuse interned strings (with cached
+// hashes) instead of building fresh ones on every call. Unknown parts fall back to building the name.
+const borderNames2 = new Map();
+const borderNames3 = new Map();
+for (const a of [...borderPositions, ...borderLines]) {
+  borderNames2.set(a, `${border.property}-${a}`);
+  const inner = new Map();
+  for (const b of [...borderPositions, ...borderLines]) {
+    inner.set(b, `${border.property}-${a}-${b}`);
+  }
+  borderNames3.set(a, inner);
+}
+
+function borderName2(prop1, a) {
+  return (prop1 === border.property && borderNames2.get(a)) || `${prop1}-${a}`;
+}
+
+function borderName3(prop1, a, b) {
+  return (prop1 === border.property && borderNames3.get(a)?.get(b)) || `${prop1}-${a}-${b}`;
+}
+
 const borderCollectionConfig = {
   [WIDTH]: {
     shorthand: borderWidth.property,
@@ -574,11 +595,11 @@ function prepareBorderStringValue({ property, value, priority, properties, parts
   const imageItem = getPropertyItem(BORDER_IMAGE, properties);
   // Handle longhand properties.
   if (prop3) {
-    const lineProperty = `${prop1}-${prop3}`;
+    const lineProperty = borderName2(prop1, prop3);
     const lineItem = getPropertyItem(lineProperty, properties);
-    const positionProperty = `${prop1}-${prop2}`;
+    const positionProperty = borderName2(prop1, prop2);
     const positionItem = getPropertyItem(positionProperty, properties);
-    const longhandProperty = `${prop1}-${prop2}-${prop3}`;
+    const longhandProperty = borderName3(prop1, prop2, prop3);
     const longhandItem = getPropertyItem(longhandProperty, properties);
     longhandItem.value = value;
     longhandItem.priority = priority;
@@ -619,13 +640,13 @@ function prepareBorderStringValue({ property, value, priority, properties, parts
     borderItems.set(longhandProperty, longhandItem);
     // Handle side-specific border shorthands (border-top, border-right, border-bottom, border-left).
   } else if (prop2 && borderPositions.has(prop2)) {
-    const lineWidthProperty = `${prop1}-width`;
+    const lineWidthProperty = borderName2(prop1, "width");
     const lineWidthItem = getPropertyItem(lineWidthProperty, properties);
-    const lineStyleProperty = `${prop1}-style`;
+    const lineStyleProperty = borderName2(prop1, "style");
     const lineStyleItem = getPropertyItem(lineStyleProperty, properties);
-    const lineColorProperty = `${prop1}-color`;
+    const lineColorProperty = borderName2(prop1, "color");
     const lineColorItem = getPropertyItem(lineColorProperty, properties);
-    const positionProperty = `${prop1}-${prop2}`;
+    const positionProperty = borderName2(prop1, prop2);
     const positionItem = getPropertyItem(positionProperty, properties);
     positionItem.value = value;
     positionItem.priority = priority;
@@ -663,7 +684,7 @@ function prepareBorderStringValue({ property, value, priority, properties, parts
       }
     }
     for (const line of borderLines) {
-      const longhandProperty = `${prop1}-${prop2}-${line}`;
+      const longhandProperty = borderName3(prop1, prop2, line);
       const longhandItem = getPropertyItem(longhandProperty, properties);
       longhandItem.value = propertyValue;
       longhandItem.priority = priority;
@@ -677,7 +698,7 @@ function prepareBorderStringValue({ property, value, priority, properties, parts
     borderItems.set(positionProperty, positionItem);
     // Handle property-specific border shorthands (border-width, border-style, border-color).
   } else if (prop2 && borderLines.has(prop2)) {
-    const lineProperty = `${prop1}-${prop2}`;
+    const lineProperty = borderName2(prop1, prop2);
     const lineItem = getPropertyItem(lineProperty, properties);
     lineItem.value = value;
     lineItem.priority = priority;
@@ -690,9 +711,9 @@ function prepareBorderStringValue({ property, value, priority, properties, parts
       }
     }
     for (const position of borderPositions) {
-      const positionProperty = `${prop1}-${position}`;
+      const positionProperty = borderName2(prop1, position);
       const positionItem = getPropertyItem(positionProperty, properties);
-      const longhandProperty = `${prop1}-${position}-${prop2}`;
+      const longhandProperty = borderName3(prop1, position, prop2);
       const longhandItem = getPropertyItem(longhandProperty, properties);
       if (propertyValue) {
         positionItem.value = replaceBorderShorthandValue(propertyValue, positionItem.value);
@@ -712,20 +733,20 @@ function prepareBorderStringValue({ property, value, priority, properties, parts
     const propertyValue = hasVarFunc(value) ? "" : value;
     imageItem.value = propertyValue ? NONE : "";
     for (const line of borderLines) {
-      const lineProperty = `${prop1}-${line}`;
+      const lineProperty = borderName2(prop1, line);
       const lineItem = getPropertyItem(lineProperty, properties);
       lineItem.value = propertyValue;
       lineItem.priority = priority;
       borderItems.set(lineProperty, lineItem);
     }
     for (const position of borderPositions) {
-      const positionProperty = `${prop1}-${position}`;
+      const positionProperty = borderName2(prop1, position);
       const positionItem = getPropertyItem(positionProperty, properties);
       positionItem.value = propertyValue;
       positionItem.priority = priority;
       borderItems.set(positionProperty, positionItem);
       for (const line of borderLines) {
-        const longhandProperty = `${positionProperty}-${line}`;
+        const longhandProperty = borderName3(prop1, position, line);
         const longhandItem = getPropertyItem(longhandProperty, properties);
         longhandItem.value = propertyValue;
         longhandItem.priority = priority;
@@ -754,7 +775,7 @@ function prepareBorderArrayValue({ value, priority, properties, parts, borderIte
   }
   const shorthandItem = getPropertyItem(border.property, properties);
   const imageItem = getPropertyItem(BORDER_IMAGE, properties);
-  const lineProperty = `${prop1}-${prop2}`;
+  const lineProperty = borderName2(prop1, prop2);
   const lineItem = getPropertyItem(lineProperty, properties);
   if (value.length === 1) {
     const [propertyValue] = value;
@@ -803,12 +824,12 @@ function prepareBorderArrayValue({ value, priority, properties, parts, borderIte
     }
   }
   for (const position of borderPositions) {
-    const positionProperty = `${prop1}-${position}`;
+    const positionProperty = borderName2(prop1, position);
     const positionItem = getPropertyItem(positionProperty, properties);
     if (positionItem.value && positionValues[position]) {
       positionItem.value = replaceBorderShorthandValue(positionValues[position], positionItem.value);
     }
-    const longhandProperty = `${positionProperty}-${prop2}`;
+    const longhandProperty = borderName3(prop1, position, prop2);
     const longhandItem = getPropertyItem(longhandProperty, properties);
     longhandItem.value = positionValues[position];
     longhandItem.priority = priority;
@@ -840,13 +861,13 @@ function prepareBorderObjectValue({ property, value, priority, properties, parts
       return;
     }
     const shorthandItem = getPropertyItem(border.property, properties);
-    const lineWidthProperty = `${prop1}-width`;
+    const lineWidthProperty = borderName2(prop1, "width");
     const lineWidthItem = getPropertyItem(lineWidthProperty, properties);
-    const lineStyleProperty = `${prop1}-style`;
+    const lineStyleProperty = borderName2(prop1, "style");
     const lineStyleItem = getPropertyItem(lineStyleProperty, properties);
-    const lineColorProperty = `${prop1}-color`;
+    const lineColorProperty = borderName2(prop1, "color");
     const lineColorItem = getPropertyItem(lineColorProperty, properties);
-    const positionProperty = `${prop1}-${prop2}`;
+    const positionProperty = borderName2(prop1, prop2);
     const positionItem = getPropertyItem(positionProperty, properties);
     if (shorthandItem.value) {
       for (const positionValue of Object.values(value)) {
@@ -859,11 +880,11 @@ function prepareBorderObjectValue({ property, value, priority, properties, parts
     positionItem.value = Object.values(value).join(" ");
     positionItem.priority = priority;
     for (const line of borderLines) {
-      const longhandProperty = `${prop1}-${prop2}-${line}`;
+      const longhandProperty = borderName3(prop1, prop2, line);
       const longhandItem = getPropertyItem(longhandProperty, properties);
       const itemValue = Object.hasOwn(value, longhandProperty) ?
         value[longhandProperty] :
-        border.initialValues.get(`${prop1}-${line}`);
+        border.initialValues.get(borderName2(prop1, line));
       if (line === WIDTH && lineWidthItem.value) {
         if (isGlobalKeyword(lineWidthItem.value)) {
           lineWidthItem.value = "";
@@ -896,11 +917,11 @@ function prepareBorderObjectValue({ property, value, priority, properties, parts
     // Handle border shorthand.
   } else {
     const shorthandItem = getPropertyItem(prop1, properties);
-    const lineWidthProperty = `${prop1}-width`;
+    const lineWidthProperty = borderName2(prop1, "width");
     const lineWidthItem = getPropertyItem(lineWidthProperty, properties);
-    const lineStyleProperty = `${prop1}-style`;
+    const lineStyleProperty = borderName2(prop1, "style");
     const lineStyleItem = getPropertyItem(lineStyleProperty, properties);
-    const lineColorProperty = `${prop1}-color`;
+    const lineColorProperty = borderName2(prop1, "color");
     const lineColorItem = getPropertyItem(lineColorProperty, properties);
     const propertyValue = Object.values(value).join(" ");
     shorthandItem.value = propertyValue;
@@ -925,14 +946,14 @@ function prepareBorderObjectValue({ property, value, priority, properties, parts
     }
     lineColorItem.priority = priority;
     for (const position of borderPositions) {
-      const positionProperty = `${prop1}-${position}`;
+      const positionProperty = borderName2(prop1, position);
       const positionItem = getPropertyItem(positionProperty, properties);
       positionItem.value = propertyValue;
       positionItem.priority = priority;
       for (const line of borderLines) {
-        const longhandProperty = `${positionProperty}-${line}`;
+        const longhandProperty = borderName3(prop1, position, line);
         const longhandItem = getPropertyItem(longhandProperty, properties);
-        const lineProperty = `${prop1}-${line}`;
+        const lineProperty = borderName2(prop1, line);
         if (Object.hasOwn(value, lineProperty)) {
           longhandItem.value = value[lineProperty];
         } else {
@@ -1024,16 +1045,16 @@ function prepareBorderProperties(property, value, priority, properties) {
   }
   const borderProps = new Map([[border.property, borderItems.get(border.property)]]);
   for (const line of borderLines) {
-    const lineProperty = `${border.property}-${line}`;
+    const lineProperty = borderName2(border.property, line);
     const lineItem = borderItems.get(lineProperty) ?? getPropertyItem(lineProperty, properties);
     borderProps.set(lineProperty, lineItem);
   }
   for (const position of borderPositions) {
-    const positionProperty = `${border.property}-${position}`;
+    const positionProperty = borderName2(border.property, position);
     const positionItem = borderItems.get(positionProperty) ?? getPropertyItem(positionProperty, properties);
     borderProps.set(positionProperty, positionItem);
     for (const line of borderLines) {
-      const longhandProperty = `${border.property}-${position}-${line}`;
+      const longhandProperty = borderName3(border.property, position, line);
       const longhandItem = borderItems.get(longhandProperty) ?? getPropertyItem(longhandProperty, properties);
       borderProps.set(longhandProperty, longhandItem);
     }
