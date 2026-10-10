@@ -836,14 +836,21 @@ function serializeString(val) {
  */
 // resolveColor() is a pure function of its arguments, and for specified values (no other options) is called repeatedly
 // with the same colors by the border shorthands, so memoize that case.
-function resolveColorMemoized(color, opt) {
+function isSpecifiedValueOnly(opt) {
   if (opt.format !== "specifiedValue") {
-    return resolveColor(color, opt);
+    return false;
   }
   for (const key in opt) {
     if (key !== "format") {
-      return resolveColor(color, opt);
+      return false;
     }
+  }
+  return true;
+}
+
+function resolveColorMemoized(color, opt) {
+  if (!isSpecifiedValueOnly(opt)) {
+    return resolveColor(color, opt);
   }
   const cachedValue = specifiedColorCache.get("", color);
   if (cachedValue !== undefined) {
@@ -852,6 +859,60 @@ function resolveColorMemoized(color, opt) {
   const result = resolveColor(color, opt);
   specifiedColorCache.set("", color, result === undefined ? CACHED_UNDEFINED : result);
   return result;
+}
+
+// The specified value of a hex color is rgb(r, g, b) or rgba(r, g, b, alpha), where the channels are the decimal byte
+// values and the alpha string depends only on the alpha byte. The alpha strings are taken from resolveColor() itself.
+const hexColorRegEx = /^(?:[\da-f]{3,4}|[\da-f]{6}|[\da-f]{8})$/i;
+// null until computed, false if resolveColor() uses an unexpected format.
+let hexAlphaStrings = null;
+
+function getHexAlphaStrings() {
+  if (hexAlphaStrings === null) {
+    hexAlphaStrings = [];
+    for (let alpha = 0; alpha < 256; alpha++) {
+      const res = resolveColor(`#000000${alpha.toString(16).padStart(2, "0")}`, { format: "specifiedValue" });
+      if (res === "rgb(0, 0, 0)") {
+        hexAlphaStrings.push(null);
+      } else if (typeof res === "string" && res.startsWith("rgba(0, 0, 0, ") && res.endsWith(")")) {
+        hexAlphaStrings.push(res.slice(14, -1));
+      } else {
+        // Unexpected format: always defer to resolveColor().
+        hexAlphaStrings = false;
+        break;
+      }
+    }
+  }
+  return hexAlphaStrings;
+}
+
+function serializeHexColor(hex) {
+  if (!hexColorRegEx.test(hex)) {
+    return resolveColorMemoized(`#${hex}`, { format: "specifiedValue" });
+  }
+  const alphaStrings = getHexAlphaStrings();
+  if (alphaStrings === false) {
+    return resolveColorMemoized(`#${hex}`, { format: "specifiedValue" });
+  }
+  let r, g, b;
+  let a = 255;
+  if (hex.length <= 4) {
+    r = parseInt(hex[0], 16) * 17;
+    g = parseInt(hex[1], 16) * 17;
+    b = parseInt(hex[2], 16) * 17;
+    if (hex.length === 4) {
+      a = parseInt(hex[3], 16) * 17;
+    }
+  } else {
+    r = parseInt(hex.slice(0, 2), 16);
+    g = parseInt(hex.slice(2, 4), 16);
+    b = parseInt(hex.slice(4, 6), 16);
+    if (hex.length === 8) {
+      a = parseInt(hex.slice(6, 8), 16);
+    }
+  }
+  const alpha = alphaStrings[a];
+  return alpha === null ? `rgb(${r}, ${g}, ${b})` : `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
 function serializeColor(val, opt = { format: "specifiedValue" }) {
@@ -867,7 +928,7 @@ function serializeColor(val, opt = { format: "specifiedValue" }) {
       break;
     }
     case AST_TYPES.HASH: {
-      const res = resolveColorMemoized(`#${value}`, opt);
+      const res = isSpecifiedValueOnly(opt) ? serializeHexColor(value) : resolveColorMemoized(`#${value}`, opt);
       if (res) {
         return res;
       }
