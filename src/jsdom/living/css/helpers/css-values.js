@@ -82,6 +82,31 @@ const isValidPropertyValueCache = new ValueCache();
 const resolveCalcCache = new ValueCache();
 const parsePropertyValueCache = new ValueCache();
 
+// Whether a value matches a property, and so the cached results above, only depends on the property's value
+// definition syntax. Many properties share one (e.g. the four border-*-width longhands), so key the caches by syntax
+// rather than by property name, which lets e.g. a border shorthand's value be parsed once rather than once per side.
+const syntaxNamespaces = new Map();
+const syntaxIds = new Map();
+
+function getSyntaxNamespace(prop) {
+  let namespace = syntaxNamespaces.get(prop);
+  if (namespace === undefined) {
+    const descriptor = cssTree.lexer.getProperty(prop);
+    namespace = prop;
+    if (descriptor && descriptor.serializable) {
+      const syntax = cssTree.definitionSyntax.generate(descriptor.syntax);
+      let id = syntaxIds.get(syntax);
+      if (id === undefined) {
+        id = `\u0001${syntaxIds.size}`;
+        syntaxIds.set(syntax, id);
+      }
+      namespace = id;
+    }
+    syntaxNamespaces.set(prop, namespace);
+  }
+  return namespace;
+}
+
 function getPropertyDefinition(property) {
   if (propertyDefinitions.has(property)) {
     return propertyDefinitions.get(property);
@@ -137,7 +162,13 @@ function isValidPropertyValue(prop, val) {
   if (val === "") {
     return true;
   }
-  const cachedValue = isValidPropertyValueCache.get(prop, val);
+  const namespace = getSyntaxNamespace(prop);
+  if (namespace !== prop && !hasVarFunc(val) && !hasCalcFunc(val)) {
+    // Without var() and math functions, parsePropertyValue() matches exactly the same value (for a property css-tree
+    // knows the syntax of), so share its cache.
+    return parsePropertyValue(prop, val) !== undefined;
+  }
+  const cachedValue = isValidPropertyValueCache.get(namespace, val);
   if (typeof cachedValue === "boolean") {
     return cachedValue;
   }
@@ -148,7 +179,7 @@ function isValidPropertyValue(prop, val) {
   } catch {
     result = false;
   }
-  isValidPropertyValueCache.set(prop, val, result);
+  isValidPropertyValueCache.set(namespace, val, result);
   return result;
 }
 
@@ -263,7 +294,8 @@ function parsePropertyValue(prop, val, opt = {}) {
     }
     val = calculatedValue;
   }
-  const cacheNamespace = caseSensitive ? `${prop}\u0000` : prop;
+  const syntaxNamespace = getSyntaxNamespace(prop);
+  const cacheNamespace = caseSensitive ? `${syntaxNamespace}\u0000` : syntaxNamespace;
   const cachedValue = parsePropertyValueCache.get(cacheNamespace, val);
   if (cachedValue === false) {
     return undefined;

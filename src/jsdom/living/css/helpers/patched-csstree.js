@@ -8,5 +8,6 @@ const csstree = require("css-tree");
 const forked = csstree.fork(syntaxes);
 forked.string = csstree.string;
 forked.ident = csstree.ident;
+forked.definitionSyntax = csstree.definitionSyntax;
 
 module.exports = forked;
