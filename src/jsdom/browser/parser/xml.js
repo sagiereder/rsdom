@@ -49,8 +49,27 @@ function isHTMLTemplateElement(element) {
 }
 
 
+// SaxesParser.on() stores each handler with a computed property name. Each store adds a property to the parser, and
+// V8 switches an object to slow (dictionary-mode) properties when enough properties are added by keyed stores, which
+// makes every property access in saxes's character loop several times slower. Declaring the handler properties up
+// front, with named stores, keeps the parser's properties fast; on() then only overwrites them. (If saxes renamed these
+// private fields, on() would still work, just more slowly.)
+class JSDOMSaxesParser extends SaxesParser {
+  constructor(options) {
+    super(options);
+    this.textHandler = undefined;
+    this.cdataHandler = undefined;
+    this.openTagHandler = undefined;
+    this.closeTagHandler = undefined;
+    this.commentHandler = undefined;
+    this.piHandler = undefined;
+    this.doctypeHandler = undefined;
+    this.errorHandler = undefined;
+  }
+}
+
 function createParser(rootNode, globalObject, saxesOptions) {
-  const parser = new SaxesParser({
+  const parser = new JSDOMSaxesParser({
     ...saxesOptions,
     // Browsers always have namespace support.
     xmlns: true,
