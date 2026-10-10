@@ -102,7 +102,7 @@ The upstream npm scripts (`npm run test:api`, `test:wpt`, `test:tuwpt`, `test:to
 
 ## Running benchmarks
 
-The benchmarks in `bench/` compare rsdom with the published jsdom 30.1.2 and [happy-dom](https://github.com/capricorn86/happy-dom). Each implementation and scenario runs in a fresh process. The scenarios cover simple divs and lists, large documents, huge tables, selectors, events, styles, and React apps (a dashboard and a complex multi-page app with forms, tables and modals, in development and production builds, plus Testing Library).
+The benchmarks in `bench/` compare rsdom with the published jsdom 30.1.2 and [happy-dom](https://github.com/capricorn86/happy-dom). Each implementation and scenario runs in a fresh process. The scenarios cover simple divs and lists, large documents, huge tables, selectors, events, styles, and React apps (a dashboard and a complex multi-page app with forms, tables and modals, plus Testing Library, using React's development builds as Jest and Vitest do).
 
 ```sh
 cd bench && npm install

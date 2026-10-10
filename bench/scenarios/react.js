@@ -5,22 +5,14 @@
 const { freshDom, installGlobals } = require("../lib/common.js");
 const { makeApps } = require("./react-apps.js");
 
-// `prod` loads React's production builds. They have no `act()`, so updates are flushed with `flushSync()` instead,
-// which renders synchronously; none of the benchmark apps use passive effects.
-function loadReact(ctx, { rtl = false, prod = false } = {}) {
-  if (prod) {
-    process.env.NODE_ENV = "production";
-  }
+// React's development builds are used, as under Jest and Vitest (NODE_ENV=test).
+function loadReact(ctx, { rtl = false } = {}) {
   const boot = freshDom(ctx, "<!DOCTYPE html><html><head></head><body></body></html>", { url: "http://localhost/" });
   installGlobals(boot.window);
   const React = require("react");
   const ReactDOM = require("react-dom");
   const ReactDOMClient = require("react-dom/client");
-  const act = prod ?
-    fn => {
-      ReactDOM.flushSync(fn);
-    } :
-    fn => React.act(fn);
+  const act = fn => React.act(fn);
   const shared = { React, ReactDOM, ReactDOMClient, act, apps: makeApps(React, ReactDOM) };
   if (rtl) {
     shared.RTL = require("@testing-library/react");
@@ -84,14 +76,13 @@ async function runDashboardUpdates(st) {
   }
 }
 
-function dashboardScenarios(prefix, prod) {
-  const prepare = ctx => loadReact(ctx, { prod });
-  const label = prod ? " (React production build)" : "";
+function dashboardScenarios(prefix) {
+  const prepare = ctx => loadReact(ctx);
   return [
     {
       name: `${prefix}/render-dashboard`,
       group: prefix,
-      desc: `createRoot + render of a ~3k-element dashboard (header/nav, sidebar, stat cards, 250-row table, form, feed)${label}`,
+      desc: `createRoot + render of a ~3k-element dashboard (header/nav, sidebar, stat cards, 250-row table, form, feed)`,
       prepare,
       setup: renderDashboard,
       async run(st) {
@@ -103,7 +94,7 @@ function dashboardScenarios(prefix, prod) {
     {
       name: `${prefix}/updates`,
       group: prefix,
-      desc: `~50 state updates on the rendered dashboard: sort, filter, theme toggle, row selection, show/hide feed${label}`,
+      desc: `~50 state updates on the rendered dashboard: sort, filter, theme toggle, row selection, show/hide feed`,
       prepare,
       async setup(ctx, shared) {
         const st = renderDashboard(ctx, shared);
@@ -116,7 +107,7 @@ function dashboardScenarios(prefix, prod) {
     {
       name: `${prefix}/unmount`,
       group: prefix,
-      desc: `root.unmount() of 8 rendered dashboards (~33k elements total)${label}`,
+      desc: `root.unmount() of 8 rendered dashboards (~33k elements total)`,
       prepare,
       async setup(ctx, { React, ReactDOMClient, apps, act }) {
         const dom = freshWindow(ctx);
@@ -143,7 +134,7 @@ function dashboardScenarios(prefix, prod) {
       name: `${prefix}/complex-app`,
       group: prefix,
       desc: "mount a 2000x8 data grid + 40-field form page, sort 4x, filter 4x, type into 3 fields, open/close a " +
-        `20-field portal modal 5x, unmount${label}`,
+        `20-field portal modal 5x, unmount`,
       prepare,
       setup: renderDashboard,
       async run(st) {
@@ -173,7 +164,7 @@ function dashboardScenarios(prefix, prod) {
 }
 
 module.exports = [
-  ...dashboardScenarios("react", false),
+  ...dashboardScenarios("react"),
   {
     name: "react/testing-library-form",
     group: "react",
@@ -222,8 +213,7 @@ module.exports = [
       st.RTL.cleanup();
       return st.dom.close();
     }
-  },
-  ...dashboardScenarios("react-prod", true)
+  }
 ];
 
 // Helpers reused by other scenario files (the array itself is the scenario list).

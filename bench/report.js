@@ -20,7 +20,6 @@ const AREAS = [
   ["Selectors", ["selectors"]],
   ["Events and style", ["events", "style"]],
   ["React", ["react"]],
-  ["React (production build)", ["react-prod"]],
   ["Accessibility queries and user-event", ["a11y"]],
   ["Web components", ["webcomponents"]],
   ["Mutation observers", ["mutation"]],
@@ -204,7 +203,11 @@ function renderMemory(results, { base, impl, happy, name }) {
 function main() {
   const args = parseArgs(process.argv.slice(2));
   const file = args.file || newestResults();
-  const section = render(JSON.parse(fs.readFileSync(file, "utf8")));
+  const results = JSON.parse(fs.readFileSync(file, "utf8"));
+  // Leave out scenarios that have since been removed from the suite.
+  const current = new Set(require("./scenarios/index.js").map(s => s.name));
+  results.rows = results.rows.filter(r => current.has(r.scenario));
+  const section = render(results);
   if (args.stdout) {
     process.stdout.write(`${section}\n`);
     return;
