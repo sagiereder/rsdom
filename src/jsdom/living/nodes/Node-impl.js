@@ -262,7 +262,20 @@ class NodeImpl extends EventTargetImpl {
     return this._memoizedQueries;
   }
 
-  _clearMemoizedQueries() {
+  // `document` is the document whose querySelectorAll() seed list may hold this node's seed collections (the node's
+  // previous document when it is being adopted).
+  _clearMemoizedQueries(document = this._ownerDocument) {
+    const memo = this._memoizedQueries;
+    if (memo === null) {
+      return;
+    }
+    // Drop the seed collections' entries from the document's most-recently-used list too, which would otherwise count
+    // them against its limit until they became the least recently used.
+    if (memo.seedCollections !== null && document._selectorSeeds !== null) {
+      for (const { token } of memo.seedCollections.values()) {
+        document._selectorSeeds.delete(token);
+      }
+    }
     this._memoizedQueries = null;
   }
 
@@ -533,7 +546,7 @@ class NodeImpl extends EventTargetImpl {
         const ancestor = links.node;
         ancestor._version++;
         if (ancestor._memoizedQueries !== null) {
-          ancestor._memoizedQueries = null;
+          ancestor._clearMemoizedQueries(document);
         }
         if (ancestor === this) {
           this._childrenList?._invalidate();

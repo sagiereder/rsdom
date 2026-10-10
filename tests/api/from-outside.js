@@ -91,6 +91,30 @@ describe("Test cases only possible to test from the outside", () => {
     assert.equal(stdout.trim(), "collected");
   });
 
+  it("does not retain removed roots through cached querySelectorAll() results", { timeout: 5000 }, () => {
+    const fixturePath = path.resolve(__dirname, "./fixtures/qsa-detached-root-with-gc.js");
+    const { status, stderr, stdout } = spawnSync("node", ["--expose-gc", fixturePath], { encoding: "utf-8" });
+
+    assert.equal(status, 0, stderr);
+    assert.equal(stdout.trim(), "collected");
+  });
+
+  it("does not retain removed elements through cached querySelectorAll() results", { timeout: 5000 }, () => {
+    const fixturePath = path.resolve(__dirname, "./fixtures/qsa-removed-children-with-gc.js");
+    const { status, stderr, stdout } = spawnSync("node", ["--expose-gc", fixturePath], { encoding: "utf-8" });
+
+    assert.equal(status, 0, stderr);
+    assert.equal(stdout.trim(), "collected");
+  });
+
+  it("does not retain a document through the journal of the document its nodes came from", { timeout: 5000 }, () => {
+    const fixturePath = path.resolve(__dirname, "./fixtures/adopted-node-journal-with-gc.js");
+    const { status, stderr, stdout } = spawnSync("node", ["--expose-gc", fixturePath], { encoding: "utf-8" });
+
+    assert.equal(status, 0, stderr);
+    assert.equal(stdout.trim(), "collected");
+  });
+
   it("does not retain removed subtrees after Range indexing", { timeout: 5000 }, () => {
     const fixturePath = path.resolve(__dirname, "./fixtures/range-indexes-with-gc.js");
     const { status, stderr, stdout } = spawnSync("node", ["--expose-gc", fixturePath], { encoding: "utf-8" });

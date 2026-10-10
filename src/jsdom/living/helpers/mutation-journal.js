@@ -10,7 +10,8 @@
 const OTHER = 0;
 // `node` was inserted into `target`.
 const INSERT = 1;
-// `node` was removed from `target`.
+// A child was removed from `target`. The removed node itself is not recorded: nothing needs it, and holding it would
+// keep the removed subtree alive.
 const REMOVE = 2;
 // An attribute named `name` (in the null namespace; otherwise `name` is null) changed on `target`.
 const ATTRIBUTE = 3;
@@ -32,18 +33,22 @@ class MutationJournal {
     return this.base + this.kinds.length;
   }
 
+  // Drops every record: collections that have not caught up rebuild, and the dropped nodes can be collected.
+  clear() {
+    this.base += this.kinds.length;
+    this.kinds.length = 0;
+    this.targets.length = 0;
+    this.nodes.length = 0;
+    this.names.length = 0;
+  }
+
   record(kind, target, node, name) {
     if (this.kinds.length === MAX_RECORDS) {
-      // Drop everything: collections that have not caught up rebuild, and the dropped nodes can be collected.
-      this.base += MAX_RECORDS;
-      this.kinds.length = 0;
-      this.targets.length = 0;
-      this.nodes.length = 0;
-      this.names.length = 0;
+      this.clear();
     }
     this.kinds.push(kind);
     this.targets.push(target);
-    this.nodes.push(node);
+    this.nodes.push(kind === REMOVE ? null : node);
     this.names.push(name);
   }
 }

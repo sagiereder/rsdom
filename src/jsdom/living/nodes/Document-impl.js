@@ -1164,6 +1164,9 @@ class DocumentImpl extends NodeImpl {
 
     if (oldDocument !== newDocument) {
       fastPathFlags.adopt(oldDocument, newDocument);
+      // The old document's journal may name nodes of this subtree, and would keep them (and through them, the new
+      // document) alive for as long as the old document sees few mutations; collections behind it rebuild instead.
+      oldDocument._mutationJournal?.clear();
       for (const inclusiveDescendant of node._shadowIncludingInclusiveDescendants()) {
         inclusiveDescendant._ownerDocument = newDocument;
 
@@ -1176,7 +1179,7 @@ class DocumentImpl extends NodeImpl {
         // Collections built before the move captured the old document's HTML-ness, and the spec
         // keeps those working. A fresh call has to see the new document, so clear the memoized ones.
         // It is this subtree that changed document; the old parent's collections are unaffected by the move.
-        inclusiveDescendant._clearMemoizedQueries();
+        inclusiveDescendant._clearMemoizedQueries(oldDocument);
 
         if (inclusiveDescendant._ceState === "custom") {
           enqueueCECallbackReaction(inclusiveDescendant, "adoptedCallback", [

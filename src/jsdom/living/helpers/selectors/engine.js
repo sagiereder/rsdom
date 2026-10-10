@@ -888,6 +888,10 @@ function anchorSearch(compiled, root, first, out) {
 // collections (so subtree mutations discard them the same way), but only the SEED_LIMIT most recently used ones in each
 // document are kept. Querying many roots, or with many distinct classes, therefore doesn't retain a collection for each
 // (root, class or tag) pair, while repeated queries keep reusing theirs.
+//
+// The root's memo holds `{ coll, token }` entries; the document's most-recently-used list maps each entry's `token` to
+// `{ seeds: WeakRef(memo map), key }`, so it can evict entries without keeping their collections, or the roots those
+// reference (often detached subtrees), alive.
 const SEED_LIMIT = 64;
 
 // Returns a live HTMLCollection impl that is a superset of the elements matching compound `c` under `root`, or null.
@@ -920,37 +924,42 @@ function seedFor(root, c, first) {
 function seedCollection(root, memo, key, first) {
   const document = root._ownerDocument;
   let seeds = memo.seedCollections;
-  let coll = seeds?.get(key);
-  if (coll !== undefined) {
+  const entry = seeds?.get(key);
+  if (entry !== undefined) {
     // Mark as most recently used.
     const recent = document._selectorSeeds;
-    const entry = recent.get(coll);
-    recent.delete(coll);
-    recent.set(coll, entry);
-    return coll;
+    const record = recent.get(entry.token);
+    if (record !== undefined) {
+      recent.delete(entry.token);
+      recent.set(entry.token, record);
+    }
+    return entry.coll;
   }
   if (first) {
     return undefined;
   }
 
   const name = key.slice(1);
-  coll = key[0] === "." ?
+  const coll = key[0] === "." ?
     createHTMLCollectionByClassNames(name, root) :
     createHTMLCollectionByNamespaceAndLocalName("*", name, root);
   if (seeds === null) {
     seeds = new Map();
     memo.seedCollections = seeds;
   }
-  seeds.set(key, coll);
+  const token = {};
+  seeds.set(key, { coll, token });
 
-  // Entries whose memo has since been discarded linger until they are the least recently used; that is bounded too.
+  // A mutation that discards the root's memo removes its entries here too (NodeImpl._clearMemoizedQueries()); entries
+  // whose root was collected linger until they are the least recently used.
   document._selectorSeeds ??= new Map();
   const recent = document._selectorSeeds;
-  recent.set(coll, { seeds, key });
+  recent.set(token, { seeds: new WeakRef(seeds), key });
   if (recent.size > SEED_LIMIT) {
-    const [oldest, { seeds: oldSeeds, key: oldKey }] = recent.entries().next().value;
-    recent.delete(oldest);
-    if (oldSeeds.get(oldKey) === oldest) {
+    const [oldToken, { seeds: oldSeedsRef, key: oldKey }] = recent.entries().next().value;
+    recent.delete(oldToken);
+    const oldSeeds = oldSeedsRef.deref();
+    if (oldSeeds !== undefined && oldSeeds.get(oldKey)?.token === oldToken) {
       oldSeeds.delete(oldKey);
     }
   }
