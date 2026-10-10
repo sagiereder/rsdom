@@ -688,6 +688,189 @@ function postProcessSameObject(file) {
   }
 }
 
+// CSSStyleProperties has an accessor pair for every CSS property, all with the same body apart from the property name,
+// which made it by far the largest generated file: compiling it, and lazily compiling its install() when the first
+// window is created, cost tens of milliseconds in every process (every test file, with Vitest). The accessors now call
+// shared functions with the property name instead. They are still distinct functions per property, with the same
+// names, lengths and behavior. Applied only when every accessor of the file has one of the two shapes.
+//
+// The generated accessors this applies to, for the attribute `name` (whose property key is `key`) of `interfaceName`.
+// webidl2js output goes through prettier, which wraps the setter's conversion context when the line gets too long.
+function ceStringGetter(key, name) {
+  return `    get ${key}() {
+      const $impl = $requireImpl(this ?? globalObject, globalObject, "get ${name}");
+
+      ceReactionsPreSteps_jsdom_living_helpers_custom_elements(globalObject);
+      try {
+        return utils.tryWrapperForImpl($impl["${name}"]);
+      } finally {
+        ceReactionsPostSteps_jsdom_living_helpers_custom_elements(globalObject);
+      }
+    }`;
+}
+function ceStringSetters(key, name, interfaceName) {
+  const context = `"Failed to set the '${name}' property on '${interfaceName}': The provided value"`;
+  return [`context: ${context}`, `context:\n          ${context}`].map(contextProperty => `    set ${key}(V) {
+      const $impl = $requireImpl(this ?? globalObject, globalObject, "set ${name}");
+
+      V = conversions["DOMString"](V, {
+        ${contextProperty},
+        globals: globalObject,
+        treatNullAsEmptyString: true
+      });
+
+      ceReactionsPreSteps_jsdom_living_helpers_custom_elements(globalObject);
+      try {
+        $impl["${name}"] = V;
+      } finally {
+        ceReactionsPostSteps_jsdom_living_helpers_custom_elements(globalObject);
+      }
+    }`);
+}
+const CE_STRING_HELPERS = `
+// Bodies of the accessors of the [CEReactions, LegacyNullToEmptyString] DOMString attributes, shared by all of
+// them; see postProcessUniformAccessors() in scripts/webidl/convert.js.
+function $ceStringGet(globalObject, wrapper, name, label) {
+  const $impl = $requireImpl(wrapper, globalObject, label);
+
+  ceReactionsPreSteps_jsdom_living_helpers_custom_elements(globalObject);
+  try {
+    return utils.tryWrapperForImpl($impl[name]);
+  } finally {
+    ceReactionsPostSteps_jsdom_living_helpers_custom_elements(globalObject);
+  }
+}
+
+function $ceStringSet(globalObject, wrapper, V, name, label) {
+  const $impl = $requireImpl(wrapper, globalObject, label);
+
+  V = conversions["DOMString"](V, {
+    context: \`Failed to set the '\${name}' property on '\${interfaceName}': The provided value\`,
+    globals: globalObject,
+    treatNullAsEmptyString: true
+  });
+
+  ceReactionsPreSteps_jsdom_living_helpers_custom_elements(globalObject);
+  try {
+    $impl[name] = V;
+  } finally {
+    ceReactionsPostSteps_jsdom_living_helpers_custom_elements(globalObject);
+  }
+}
+`;
+
+function postProcessUniformAccessors(file) {
+  const source = fs.readFileSync(file, "utf8");
+  const interfaceName = /^const interfaceName = "([A-Za-z]+)";$/mu.exec(source)?.[1];
+  const headers = [...source.matchAll(/^ {4}(get|set) ("[^"\\\n]+"|[A-Za-z_$][\w$]*)\((V?)\) \{$/gmu)];
+  if (interfaceName === undefined || headers.length < 100) {
+    return;
+  }
+  let output = "";
+  let position = 0;
+  for (const { index, 1: kind, 2: key } of headers) {
+    const name = key.startsWith(`"`) ? key.slice(1, -1) : key;
+    const candidates = kind === "get" ? [ceStringGetter(key, name)] : ceStringSetters(key, name, interfaceName);
+    const original = candidates.find(candidate => source.startsWith(candidate, index));
+    if (original === undefined) {
+      // Some accessor has another shape: leave the file as it is.
+      return;
+    }
+    const call = kind === "get" ?
+      `      return $ceStringGet(globalObject, this ?? globalObject, "${name}", "get ${name}");` :
+      `      $ceStringSet(globalObject, this ?? globalObject, V, "${name}", "set ${name}");`;
+    output += `${source.slice(position, index)}    ${kind} ${key}(${kind === "get" ? "" : "V"}) {\n${call}\n    }`;
+    position = index + original.length;
+  }
+  output += source.slice(position);
+  const requireImplEnd = output.indexOf("\n}\n", output.indexOf("\nfunction $requireImpl(")) + 3;
+  fs.writeFileSync(file, output.slice(0, requireImplEnd) + CE_STRING_HELPERS + output.slice(requireImplEnd));
+}
+
+// Interface objects of interfaces without a constructor operation are plain functions with an object-literal
+// prototype, instead of a class whose members webidl2js then makes enumerable one by one with
+// Object.defineProperties(): accessors and methods defined in an object literal are enumerable already, which makes
+// installing the interfaces into every new window much cheaper (CSSStyleProperties alone has over 3000 accessors).
+// The installed interface object and prototype have the same own properties, in the same order, with the same
+// attributes as the class version. Calling the interface object throws the same errors as the class did: with new, the
+// "Illegal constructor" TypeError of the window's realm; without, the TypeError (from Node's realm, like the interface
+// object itself) with the message V8 gives when a class is called without new.
+const ILLEGAL_CONSTRUCTOR = `    constructor() {
+      throw new globalObject.TypeError("Illegal constructor");
+    }
+`;
+const MEMBER_HEADER = /^ {4}(?:(?:get|set) )?([A-Za-z_$][\w$]*|"[^"\\]*"|\[Symbol\.[A-Za-z]+\])\(.*\) \{$/u;
+
+function postProcessInterfaceObject(file) {
+  const source = fs.readFileSync(file, "utf8");
+  const classMatch = /^ {2}class ([\w$]+)(?: extends ([\w$.]+))? \{\n/mu.exec(source);
+  if (classMatch === null || !source.startsWith(ILLEGAL_CONSTRUCTOR, classMatch.index + classMatch[0].length)) {
+    return;
+  }
+  const [, name, base] = classMatch;
+  const classStart = classMatch.index;
+  const bodyStart = classStart + classMatch[0].length + ILLEGAL_CONSTRUCTOR.length;
+  const protoDefinitions = `\n  }\n  Object.defineProperties(${name}.prototype, {\n`;
+  const bodyEnd = source.indexOf(protoDefinitions, bodyStart - 1);
+  const entriesStart = bodyEnd + protoDefinitions.length;
+  const entriesEnd = source.indexOf("\n  });\n", entriesStart);
+  if (bodyEnd === -1 || entriesEnd === -1) {
+    // A single-line Object.defineProperties() (only [Symbol.toStringTag]): nothing to gain.
+    return;
+  }
+
+  // Class members: "    [get |set ]key(...) {" up to the next "    }", separated by blank lines.
+  const memberKeys = new Set();
+  const members = [];
+  const bodyLines = bodyEnd < bodyStart ? [] : source.slice(bodyStart, bodyEnd + 1).split("\n");
+  for (let i = 0; i < bodyLines.length; i++) {
+    const line = bodyLines[i];
+    if (line === "") {
+      continue;
+    }
+    const memberMatch = MEMBER_HEADER.exec(line);
+    if (memberMatch === null) {
+      return;
+    }
+    const end = bodyLines.indexOf("    }", i);
+    memberKeys.add(memberMatch[1]);
+    members.push(bodyLines.slice(i, end + 1).join("\n"));
+    i = end;
+  }
+
+  // Entries that only make a member enumerable are no longer needed; members missing one become non-enumerable.
+  const enumerableKeys = new Set();
+  const otherEntries = [];
+  for (const entry of source.slice(entriesStart, entriesEnd).split("\n")) {
+    const enumerableMatch = /^ {4}([^ ].*): \{ enumerable: true \},?$/u.exec(entry);
+    if (enumerableMatch !== null && memberKeys.has(enumerableMatch[1])) {
+      enumerableKeys.add(enumerableMatch[1]);
+    } else {
+      otherEntries.push(entry);
+    }
+  }
+  const nonEnumerable = ["constructor", ...[...memberKeys].filter(key => !enumerableKeys.has(key))];
+  // Other entries are kept verbatim (they may span lines); a trailing comma on the last one is harmless.
+  const entries = [...nonEnumerable.map(key => `    ${key}: { enumerable: false },`), ...otherEntries].join("\n");
+
+  const prototypeMembers = [`${base ? `    __proto__: ${base}.prototype,\n` : ""}    constructor: ${name}`, ...members];
+  const replacement = `  const ${name} = function ${name}() {
+    if (new.target === undefined) {
+      throw new TypeError("Class constructor ${name} cannot be invoked without 'new'");
+    }
+    throw new globalObject.TypeError("Illegal constructor");
+  };
+${base ? `  Object.setPrototypeOf(${name}, ${base});\n` : ""}  const $prototype = {
+${prototypeMembers.join(",\n\n")}
+  };
+  Object.defineProperty(${name}, "prototype", { value: $prototype, writable: false });
+  Object.defineProperties($prototype, {
+${entries}
+  });
+`;
+  fs.writeFileSync(file, source.slice(0, classStart) + replacement + source.slice(entriesEnd + "\n  });\n".length));
+}
+
 function postProcessWrappers() {
   for (const name of fs.readdirSync(outputDir)) {
     if (name.endsWith(".js")) {
@@ -696,6 +879,8 @@ function postProcessWrappers() {
       postProcessStringArguments(file);
       postProcessArgumentArrays(file);
       postProcessSameObject(file);
+      postProcessUniformAccessors(file);
+      postProcessInterfaceObject(file);
     }
   }
 }
