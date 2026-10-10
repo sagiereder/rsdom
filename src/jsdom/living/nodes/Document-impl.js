@@ -1,7 +1,6 @@
 "use strict";
 
 const { CookieJar } = require("tough-cookie");
-const { DOMSelector } = require("@asamuzakjp/dom-selector");
 
 const NodeImpl = require("./Node-impl").implementation;
 const idlUtils = require("../../../generated/idl/utils");
@@ -297,6 +296,9 @@ class DocumentImpl extends NodeImpl {
   // The `DOMSelector` instance is lazily created, as it is somewhat expensive to create and not always needed.
   _getDOMSelector() {
     if (!this.#domSelector) {
+      // Required here rather than at the top: loading the selector engine takes tens of milliseconds, a cost every
+      // process (e.g. every Vitest test file) would otherwise pay up front even if nothing ever needs it.
+      const { DOMSelector } = require("@asamuzakjp/dom-selector");
       this.#domSelector = new DOMSelector(this._globalObject, this._ownerDocument, {
         idlUtils
       });
