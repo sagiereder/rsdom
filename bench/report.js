@@ -152,9 +152,10 @@ function renderMemory(results, { base, impl, happy, name }) {
     "",
     "**Retained heap** is the JS heap plus external memory still reachable after the scenario ran (the document is " +
     "still held, as a test would hold it), over a baseline taken after the implementation was loaded; it is read after " +
-    "a full GC, as the median over the timed iterations. **Peak RSS** is the worker process's maximum resident set size " +
+    "a full GC, as the median over the first three timed iterations. **Peak RSS** is the worker process's maximum resident set size " +
     "over the whole run, including module loading and warmups, so it also reflects garbage the GC had not yet " +
-    "reclaimed. Lower is better; ratios are the other implementation's number / rsdom's.",
+    "reclaimed. Lower is better. The multiplier next to a jsdom or happy-dom number is how many times rsdom's it is (shown " +
+    "where both retain at least 1 MB).",
     ""
   ];
   const cols = ["Area", "Scenario", ...shown.map(i => `${name(i)} retained (MB)`), ...shown.map(i => `${name(i)} peak RSS (MB)`)];
@@ -162,24 +163,29 @@ function renderMemory(results, { base, impl, happy, name }) {
   const ratios = { retained: new Map(others.map(o => [o, []])), rss: new Map(others.map(o => [o, []])) };
   const row = (areaCell, r) => {
     const cells = [areaCell, `\`${r.scenario}\``];
+    const mine = mem(r, impl, "retainedMB");
+    const myRss = mem(r, impl, "peakRssMB");
+    // Other implementations' cells also show how many times more they use than rsdom.
     for (const i of shown) {
       const v = mem(r, i, "retainedMB");
-      cells.push(v === null ? "N/A" : fmtMB(v));
+      if (v === null) {
+        cells.push("N/A");
+      } else if (i !== impl && mine !== null && v >= 1 && mine >= 1) {
+        ratios.retained.get(i).push(v / mine);
+        cells.push(`${fmtMB(v)} (${fmtX(v / mine)})`);
+      } else {
+        cells.push(fmtMB(v));
+      }
     }
     for (const i of shown) {
       const v = mem(r, i, "peakRssMB");
-      cells.push(v === null ? "N/A" : String(v));
-    }
-    const mine = mem(r, impl, "retainedMB");
-    const myRss = mem(r, impl, "peakRssMB");
-    for (const o of others) {
-      const v = mem(r, o, "retainedMB");
-      if (v !== null && mine !== null && v >= 1 && mine >= 1) {
-        ratios.retained.get(o).push(v / mine);
-      }
-      const rss = mem(r, o, "peakRssMB");
-      if (rss !== null && myRss !== null) {
-        ratios.rss.get(o).push(rss / myRss);
+      if (v === null) {
+        cells.push("N/A");
+      } else if (i !== impl && myRss !== null) {
+        ratios.rss.get(i).push(v / myRss);
+        cells.push(`${v} (${fmtX(v / myRss)})`);
+      } else {
+        cells.push(String(v));
       }
     }
     lines.push(`| ${cells.join(" | ")} |`);
