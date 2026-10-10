@@ -121,32 +121,43 @@ exports.createWindow = options => {
   // Not sure why this is necessary... TODO figure it out.
   Object.defineProperty(idlUtils.implForWrapper(window), idlUtils.wrapperSymbol, { get: () => window._globalProxy });
 
-  // Fire or prepare to fire load and pageshow events.
-  process.nextTick(() => {
-    const documentImpl = window._document;
-    if (documentImpl._isDestroyed) {
-      return;
-    }
-
-    if (window.document.readyState === "complete") {
-      fireAnEvent("load", window, undefined, {}, true);
-    } else {
-      window.document.addEventListener("load", () => {
-        fireAnEvent("load", window, undefined, {}, true);
-        if (documentImpl._isDestroyed) {
-          return;
-        }
-
-        if (!documentImpl._pageShowingFlag) {
-          documentImpl._pageShowingFlag = true;
-          fireAPageTransitionEvent("pageshow", window, false);
-        }
-      });
-    }
-  });
+  // Fire or prepare to fire load and pageshow events. The queued tick only holds the window through a holder that
+  // window.close() empties, so a closed window can be collected without waiting for the tick queue to drain.
+  const pendingLoadTick = { window };
+  window._document._pendingLoadTick = pendingLoadTick;
+  process.nextTick(runInitialLoadTick, pendingLoadTick);
 
   return window;
 };
+
+function runInitialLoadTick(pendingLoadTick) {
+  const { window } = pendingLoadTick;
+  if (window === null) {
+    return;
+  }
+  pendingLoadTick.window = null;
+  const documentImpl = window._document;
+  documentImpl._pendingLoadTick = null;
+  if (documentImpl._isDestroyed) {
+    return;
+  }
+
+  if (window.document.readyState === "complete") {
+    fireAnEvent("load", window, undefined, {}, true);
+  } else {
+    window.document.addEventListener("load", () => {
+      fireAnEvent("load", window, undefined, {}, true);
+      if (documentImpl._isDestroyed) {
+        return;
+      }
+
+      if (!documentImpl._pageShowingFlag) {
+        documentImpl._pageShowingFlag = true;
+        fireAPageTransitionEvent("pageshow", window, false);
+      }
+    });
+  }
+}
 
 function installEventHandlers(window) {
   installGlobalEventHandlerHelpers(window);
@@ -822,6 +833,10 @@ function installOwnProperties(window, { settings, documentOptions, commonForOrig
     }
     // Mark destruction before aborting descendants: interceptor abort listeners can reenter `window.close()`.
     doc._isDestroyed = true;
+    if (doc._pendingLoadTick !== null) {
+      doc._pendingLoadTick.window = null;
+      doc._pendingLoadTick = null;
+    }
 
     // Include child navigables in shadow trees, which are absent from our indexed Window properties.
     for (const child of doc._childDocuments) {

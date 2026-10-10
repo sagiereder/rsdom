@@ -1,10 +1,24 @@
 "use strict";
 
-const {
-  resolve: resolveColor,
-  resolveGradient,
-  utils: { cssCalc, splitValue }
-} = require("@asamuzakjp/css-color");
+// @asamuzakjp/css-color is loaded on first use: loading it takes several milliseconds, which every process (e.g. every
+// Vitest test file) would otherwise pay up front even if it never resolves a color or a math function.
+let cssColor = null;
+function loadCSSColor() {
+  cssColor ??= require("@asamuzakjp/css-color");
+  return cssColor;
+}
+function resolveColor(value, opt) {
+  return loadCSSColor().resolve(value, opt);
+}
+function resolveGradient(value, opt) {
+  return loadCSSColor().resolveGradient(value, opt);
+}
+function cssCalc(value, opt) {
+  return loadCSSColor().utils.cssCalc(value, opt);
+}
+function splitValue(value, opt) {
+  return loadCSSColor().utils.splitValue(value, opt);
+}
 const cssTree = require("./patched-csstree.js");
 const propertyDefinitions = require("../../../../generated/css-property-definitions");
 const { asciiLowercase } = require("../../helpers/strings");

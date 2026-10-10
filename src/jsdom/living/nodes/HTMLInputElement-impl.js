@@ -314,9 +314,10 @@ class HTMLInputElementImpl extends HTMLElementImpl {
     const owner = formOwner(this);
     // With our current owner calculation, an unidentified form cannot own controls outside its subtree.
     const root = owner === null ? this.getRootNode() : owner._getFormControlSearchRoot();
+    // The name is compared first: it rules out most candidates, and is cheaper to get than the type.
     const matches = candidate => candidate !== this && (!checkedOnly || candidate._checkedness) &&
-      candidate.type === "radio" &&
-      candidate.getAttributeNS(null, "name") === name && formOwner(candidate) === owner;
+      candidate.getAttributeNS(null, "name") === name && candidate.type === "radio" &&
+      formOwner(candidate) === owner;
     const result = root.getElementsByTagNameNS(HTML_NS, "input").filter(matches);
     if (root._namespaceURI === HTML_NS && root._localName === "input" && matches(root)) {
       result.unshift(root);
