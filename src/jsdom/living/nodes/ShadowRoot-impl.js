@@ -10,7 +10,7 @@ const InnerHTMLImpl = require("../domparsing/InnerHTML-impl").implementation;
 class ShadowRootImpl extends DocumentFragment {
   constructor(globalObject, args, privateData) {
     super(globalObject, args, privateData);
-    fastPathFlags.shadowRoots = true;
+    fastPathFlags.noteShadowRoot(this);
 
     const { mode } = privateData;
     this._mode = mode;
