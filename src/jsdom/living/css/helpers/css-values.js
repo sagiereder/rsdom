@@ -130,27 +130,33 @@ function getSyntaxNamespace(prop) {
   return namespace;
 }
 
-// Single-token fast path for parsePropertyValue().
+// Token-class fast path for parsePropertyValue().
 //
-// Whether a value consisting of one <number-token>, <percentage-token>, <dimension-token> or hex <hash-token> matches a
-// syntax depends only on a few features of the token, never on the rest of its text (see css-tree's lexer/generic.cjs
-// and lexer/match.cjs):
+// css-tree matches a value against a syntax token by token, and whether a <number-token>, <percentage-token>,
+// <dimension-token> or hex <hash-token> matches at some position depends only on a few features of the token, never on
+// the rest of its text (see css-tree's lexer/generic.cjs and lexer/match.cjs):
 //   - its token type, and for dimensions the (case-insensitive) unit;
-//   - for numbers: whether it is written as an integer (optional sign followed by digits only), and where its numeric
-//     value lies relative to every numeric range bound appearing in any syntax (this also covers <zero>);
+//   - for numbers: whether it is written as an integer (optional sign followed by digits only), its sign character, and
+//     where its numeric value lies relative to every numeric range bound appearing in any syntax (this covers <zero>);
 //   - for hashes: the length (<hex-color>) and whether the first character can start an identifier (<id-selector>);
-//   - its exact text, but only when that text equals a keyword, token or string literal of some syntax, or is "0"
-//     (which <length> treats specially). Such values are excluded from the fast path.
-// So the match result is computed once per (syntax, token class) by the regular path, and other values of the same
-// class reuse it. The parsed node is then built directly, exactly as the regular path would build it.
-const singleNumericTokenRegEx = /^([+-]?)(\d+|\d*\.\d+)(%|[a-z]+)?$/i;
+//   - its exact text, but only when that text equals a keyword, token, function or string literal of some syntax, or is
+//     "0" (which <length> treats specially).
+// (The generics that inspect the text of several tokens together, <urange> and <an-plus-b>, are not used by property
+// syntaxes.) So for a value made of such tokens, identifiers and standalone "/" and "," operators, separated by
+// whitespace, the match result depends only on the sequence of token classes, where tokens with literal text,
+// identifiers and operators are classes of their own (keyed by their exact text). It is computed once per
+// (syntax, class sequence) by the regular path, and other values with the same class sequence reuse it, with the parsed
+// nodes built directly, exactly as the regular path builds them.
+const numericTokenRegEx = /^([+-]?)(\d+|\d*\.\d+)(%|[a-z]+)?$/i;
 const hexHashTokenRegEx = /^#[\da-f]+$/i;
-const SINGLE_TOKEN_CLASS_LIMIT = 8192;
-const singleTokenClassValidity = new Map();
-let singleTokenSyntaxInfo;
+const identTokenRegEx = /^-?[a-z_][\w-]*$/i;
+const cssWhitespaceRegEx = /[ \t\n\r\f]+/;
+const TOKEN_CLASS_LIMIT = 8192;
+const tokenClassValidity = new Map();
+let tokenClassSyntaxInfo = null;
 
-function getSingleTokenSyntaxInfo() {
-  if (singleTokenSyntaxInfo === undefined) {
+function getTokenClassSyntaxInfo() {
+  if (tokenClassSyntaxInfo === null) {
     const literals = new Set(["0"]);
     const bounds = new Set([0]);
     function visit(node) {
@@ -196,70 +202,103 @@ function getSingleTokenSyntaxInfo() {
         visit(dict[name].syntax);
       }
     }
-    singleTokenSyntaxInfo = { literals, bounds: [...bounds].sort((a, b) => a - b) };
+    tokenClassSyntaxInfo = { literals, bounds: [...bounds].sort((a, b) => a - b) };
   }
-  return singleTokenSyntaxInfo;
+  return tokenClassSyntaxInfo;
 }
 
-function getSingleTokenClass(val) {
-  const firstChar = val.charCodeAt(0);
+// Appends the parsed node for one token to nodes and returns its class key, or returns null if it is not a supported
+// token.
+function classifyToken(token, caseSensitive, nodes) {
+  const firstChar = token.charCodeAt(0);
   // "#"
   if (firstChar === 35) {
-    if (!hexHashTokenRegEx.test(val)) {
+    if (!hexHashTokenRegEx.test(token)) {
       return null;
     }
-    const { literals } = getSingleTokenSyntaxInfo();
-    if (literals.has(asciiLowercase(val))) {
+    const node = { type: AST_TYPES.HASH, loc: null, value: token.slice(1) };
+    if (getTokenClassSyntaxInfo().literals.has(asciiLowercase(token))) {
+      nodes.push(node);
+      return `=${token}`;
+    }
+    // Hex digits are either letters, which start an identifier, or digits, which don't.
+    nodes.push(node);
+    return `#${token.length}${token.charCodeAt(1) > 57 ? "a" : "d"}`;
+  }
+  // A digit, sign or ".".
+  if ((firstChar >= 48 && firstChar <= 57) || firstChar === 43 || firstChar === 45 || firstChar === 46) {
+    const match = numericTokenRegEx.exec(token);
+    if (match !== null) {
+      const [, sign, digits, suffix] = match;
+      const numberText = sign + digits;
+      let node, typeKey;
+      if (suffix === undefined) {
+        node = { type: AST_TYPES.NUMBER, loc: null, value: token };
+        typeKey = "n";
+      } else if (suffix === "%") {
+        node = { type: AST_TYPES.PERCENTAGE, loc: null, value: numberText };
+        typeKey = "p";
+      } else {
+        const unit = asciiLowercase(suffix);
+        node = { type: AST_TYPES.DIMENSION, value: numberText, unit };
+        typeKey = `d${unit}`;
+      }
+      const { literals, bounds } = getTokenClassSyntaxInfo();
+      if (literals.has(asciiLowercase(token))) {
+        nodes.push(node);
+        return `=${token}`;
+      }
+      const number = Number(numberText);
+      let rangeKey = "";
+      for (const bound of bounds) {
+        if (number < bound) {
+          rangeKey += "<";
+        } else {
+          rangeKey += number === bound ? "=" : ">";
+        }
+      }
+      nodes.push(node);
+      return `${typeKey}:${sign}${digits.includes(".") ? "f" : "i"}${rangeKey}`;
+    }
+  }
+  if (identTokenRegEx.test(token)) {
+    const node = caseSensitive ?
+      { type: AST_TYPES.IDENTIFIER, loc: null, name: token } :
+      { type: AST_TYPES.IDENTIFIER, name: asciiLowercase(token) };
+    nodes.push(node);
+    return `=${token}`;
+  }
+  if (token === "/" || token === ",") {
+    nodes.push({ type: "Operator", loc: null, value: token });
+    return `=${token}`;
+  }
+  return null;
+}
+
+// Returns { key, nodes } for a value supported by the fast path, or null.
+function classifyTokens(val, caseSensitive) {
+  const tokens = cssWhitespaceRegEx.test(val) ? val.split(cssWhitespaceRegEx) : [val];
+  if (tokens.length === 1) {
+    // A lone identifier (e.g. a keyword or a global keyword) is left to the regular path and its cache.
+    const firstChar = val.charCodeAt(0);
+    if (firstChar !== 35 && !(firstChar >= 48 && firstChar <= 57) && firstChar !== 43 && firstChar !== 45 &&
+        firstChar !== 46) {
       return null;
     }
-    // Identifier start: a letter (hex digits are either letters or digits).
-    const identStart = val.charCodeAt(1) > 57 ? "a" : "d";
-    return {
-      key: `#${val.length}${identStart}`,
-      node: { type: AST_TYPES.HASH, loc: null, value: val.slice(1) }
-    };
   }
-  // Not a digit, sign or ".".
-  if (!((firstChar >= 48 && firstChar <= 57) || firstChar === 43 || firstChar === 45 || firstChar === 46)) {
+  const nodes = [];
+  let key = classifyToken(tokens[0], caseSensitive, nodes);
+  if (key === null) {
     return null;
   }
-  const match = singleNumericTokenRegEx.exec(val);
-  if (match === null) {
-    return null;
-  }
-  const { literals, bounds } = getSingleTokenSyntaxInfo();
-  if (literals.has(asciiLowercase(val))) {
-    return null;
-  }
-  const [, sign, digits, suffix] = match;
-  const numberText = sign + digits;
-  const number = Number(numberText);
-  let key = "";
-  for (const bound of bounds) {
-    if (number < bound) {
-      key += "<";
-    } else {
-      key += number === bound ? "=" : ">";
+  for (let i = 1; i < tokens.length; i++) {
+    const tokenKey = classifyToken(tokens[i], caseSensitive, nodes);
+    if (tokenKey === null) {
+      return null;
     }
+    key += `\u0002${tokenKey}`;
   }
-  key = `${sign}${digits.includes(".") ? "f" : "i"}${key}`;
-  if (suffix === undefined) {
-    return {
-      key: `n${key}`,
-      node: { type: AST_TYPES.NUMBER, loc: null, value: val }
-    };
-  }
-  if (suffix === "%") {
-    return {
-      key: `p${key}`,
-      node: { type: AST_TYPES.PERCENTAGE, loc: null, value: numberText }
-    };
-  }
-  const unit = asciiLowercase(suffix);
-  return {
-    key: `d${unit}\u0000${key}`,
-    node: { type: AST_TYPES.DIMENSION, value: numberText, unit }
-  };
+  return { key, nodes };
 }
 
 function getPropertyDefinition(property) {
@@ -450,13 +489,13 @@ function parsePropertyValue(prop, val, opt = {}) {
     val = calculatedValue;
   }
   const syntaxNamespace = getSyntaxNamespace(prop);
-  const singleToken = getSingleTokenClass(val);
-  let singleTokenClassKey, parsedValue;
-  if (singleToken !== null) {
-    singleTokenClassKey = `${syntaxNamespace}\u0000${singleToken.key}`;
-    const valid = singleTokenClassValidity.get(singleTokenClassKey);
+  const tokenClasses = classifyTokens(val, caseSensitive);
+  let tokenClassKey, parsedValue;
+  if (tokenClasses !== null) {
+    tokenClassKey = `${syntaxNamespace}\u0000${tokenClasses.key}`;
+    const valid = tokenClassValidity.get(tokenClassKey);
     if (valid !== undefined) {
-      return valid ? [singleToken.node] : undefined;
+      return valid ? tokenClasses.nodes : undefined;
     }
   }
   const cacheNamespace = caseSensitive ? `${syntaxNamespace}\u0000` : syntaxNamespace;
@@ -556,11 +595,11 @@ function parsePropertyValue(prop, val, opt = {}) {
     }
   }
   parsePropertyValueCache.set(cacheNamespace, val, parsedValue);
-  if (singleTokenClassKey !== undefined) {
-    if (singleTokenClassValidity.size >= SINGLE_TOKEN_CLASS_LIMIT) {
-      singleTokenClassValidity.clear();
+  if (tokenClassKey !== undefined) {
+    if (tokenClassValidity.size >= TOKEN_CLASS_LIMIT) {
+      tokenClassValidity.clear();
     }
-    singleTokenClassValidity.set(singleTokenClassKey, parsedValue !== false);
+    tokenClassValidity.set(tokenClassKey, parsedValue !== false);
   }
   if (parsedValue === false) {
     return undefined;
