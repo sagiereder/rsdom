@@ -15,5 +15,14 @@ module.exports = [
   ...require("./tables.js"),
   ...require("./selectors.js"),
   ...require("./events-style.js"),
-  ...require("./react.js")
+  ...require("./react.js"),
+  ...require("./a11y.js"),
+  ...require("./style-dynamic.js"),
+  ...require("./webcomponents.js"),
+  ...require("./mutation.js"),
+  ...require("./template.js"),
+  ...require("./forms.js"),
+  ...require("./startup.js"),
+  ...require("./real-page.js"),
+  ...require("./xml.js")
 ];

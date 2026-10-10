@@ -63,6 +63,27 @@ async function typeInto(window, el, text, act) {
   }
 }
 
+// ~50 state updates on a rendered dashboard (sort, filter, theme, row selection, show/hide feed).
+async function runDashboardUpdates(st) {
+  const { act } = st;
+  const c = () => st.apps.getController();
+  for (let i = 0; i < 4; i++) {
+    await act(() => c().setSortDir(d => -d));
+  }
+  for (const f of ["1", "12", "", "admin", "User 2", ""]) {
+    await act(() => c().setFilter(f));
+  }
+  for (let i = 0; i < 4; i++) {
+    await act(() => c().setTheme(t => (t === "dark" ? "light" : "dark")));
+  }
+  for (let i = 0; i < 30; i++) {
+    await act(() => c().onSelect(i * 7));
+  }
+  for (let i = 0; i < 4; i++) {
+    await act(() => c().setShowFeed(s => !s));
+  }
+}
+
 function dashboardScenarios(prefix, prod) {
   const prepare = ctx => loadReact(ctx, { prod });
   const label = prod ? " (React production build)" : "";
@@ -89,25 +110,7 @@ function dashboardScenarios(prefix, prod) {
         await st.act(() => st.root.render(st.React.createElement(st.apps.Dashboard)));
         return st;
       },
-      async run(st) {
-        const { act } = st;
-        const c = () => st.apps.getController();
-        for (let i = 0; i < 4; i++) {
-          await act(() => c().setSortDir(d => -d));
-        }
-        for (const f of ["1", "12", "", "admin", "User 2", ""]) {
-          await act(() => c().setFilter(f));
-        }
-        for (let i = 0; i < 4; i++) {
-          await act(() => c().setTheme(t => (t === "dark" ? "light" : "dark")));
-        }
-        for (let i = 0; i < 30; i++) {
-          await act(() => c().onSelect(i * 7));
-        }
-        for (let i = 0; i < 4; i++) {
-          await act(() => c().setShowFeed(s => !s));
-        }
-      },
+      run: runDashboardUpdates,
       teardown: closeDashboard
     },
     {
@@ -222,3 +225,6 @@ module.exports = [
   },
   ...dashboardScenarios("react-prod", true)
 ];
+
+// Helpers reused by other scenario files (the array itself is the scenario list).
+Object.assign(module.exports, { loadReact, renderDashboard, closeDashboard, runDashboardUpdates });

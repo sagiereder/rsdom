@@ -1,6 +1,5 @@
 "use strict";
 
-const parse5 = require("parse5");
 const nativeParser = require("./html-native");
 
 const { createElement } = require("../../living/helpers/create-element");
@@ -181,6 +180,14 @@ class JSDOMParse5Adapter {
 // Assign shared adapters with serializer.
 Object.assign(JSDOMParse5Adapter.prototype, serializationAdapter);
 
+// parse5 is only needed when the native parser is unavailable or declines a document, so it is loaded on first use:
+// loading it costs every process several milliseconds.
+let parse5 = null;
+function loadParse5() {
+  parse5 ??= require("parse5");
+  return parse5;
+}
+
 function parseFragment(markup, contextElement) {
   const ownerDocument = contextElement.localName === "template" && contextElement.namespaceURI === HTML_NS ?
     contextElement.content._ownerDocument :
@@ -197,7 +204,7 @@ function parseFragment(markup, contextElement) {
     treeAdapter: new JSDOMParse5Adapter(ownerDocument, { fragment: true })
   };
 
-  return parse5.parseFragment(contextElement, markup, config);
+  return loadParse5().parseFragment(contextElement, markup, config);
 }
 
 function parseIntoDocument(markup, ownerDocument) {
@@ -210,7 +217,7 @@ function parseIntoDocument(markup, ownerDocument) {
     treeAdapter: new JSDOMParse5Adapter(ownerDocument)
   };
 
-  return parse5.parse(markup, config);
+  return loadParse5().parse(markup, config);
 }
 
 module.exports = {

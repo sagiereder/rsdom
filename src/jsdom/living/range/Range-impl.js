@@ -430,8 +430,9 @@ class RangeImpl extends AbstractRangeImpl {
 
     if (node._referencedRanges === null) {
       node._referencedRanges = new Set();
-      fastPathFlags.ranges = true;
     }
+    // The node document of every boundary point must have the flag set (see ../helpers/fast-path-flags.js).
+    fastPathFlags.noteRangeBoundary(node);
     if (!node._referencedRanges.has(this._weakRef)) {
       node._referencedRanges.add(this._weakRef);
     }
@@ -453,8 +454,9 @@ class RangeImpl extends AbstractRangeImpl {
 
     if (node._referencedRanges === null) {
       node._referencedRanges = new Set();
-      fastPathFlags.ranges = true;
     }
+    // The node document of every boundary point must have the flag set (see ../helpers/fast-path-flags.js).
+    fastPathFlags.noteRangeBoundary(node);
     if (!node._referencedRanges.has(this._weakRef)) {
       node._referencedRanges.add(this._weakRef);
     }

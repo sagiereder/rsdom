@@ -20,7 +20,15 @@ const AREAS = [
   ["Selectors", ["selectors"]],
   ["Events and style", ["events", "style"]],
   ["React", ["react"]],
-  ["React (production build)", ["react-prod"]]
+  ["React (production build)", ["react-prod"]],
+  ["Accessibility queries and user-event", ["a11y"]],
+  ["Web components", ["webcomponents"]],
+  ["Mutation observers", ["mutation"]],
+  ["Template rendering", ["template"]],
+  ["Forms", ["forms"]],
+  ["Window startup", ["startup"]],
+  ["Real page parsing", ["parse"]],
+  ["XML and SVG", ["xml"]]
 ];
 
 function parseArgs(argv) {
@@ -47,6 +55,7 @@ function newestResults() {
 }
 
 const fmtMs = ms => (ms >= 100 ? ms.toFixed(0) : ms >= 10 ? ms.toFixed(1) : ms.toFixed(2));
+const fmtMB = mb => (mb >= 100 ? mb.toFixed(0) : mb >= 10 ? mb.toFixed(1) : mb.toFixed(2));
 const fmtX = x => `${x >= 10 ? x.toFixed(1) : x.toFixed(2)}x`;
 const geomean = xs => Math.exp(xs.reduce((a, x) => a + Math.log(x), 0) / xs.length);
 
@@ -119,8 +128,77 @@ function render(results) {
     mean.push(`**${fmtX(geomean(vsHappy))}**`);
   }
   lines.push(`| ${mean.join(" | ")} |`);
+  lines.push(...renderMemory(results, { base, impl, happy, name }));
   lines.push("", "Regenerate this table with `node bench/report.js` after a full `node bench/run.js`.");
   return lines.join("\n");
+}
+
+// Retained heap (JS heap + external still reachable after run, over the worker's post-load baseline; median over the
+// timed iterations) and the worker process's peak RSS, per scenario. Ratios are other / rsdom (> 1 means rsdom uses
+// less). The retained-heap geomean skips scenarios where either side keeps < 1 MB, where the ratio is noise.
+function renderMemory(results, { base, impl, happy, name }) {
+  const has = results.rows.some(r => r.results[impl] && r.results[impl].retainedMB !== undefined);
+  if (!has) {
+    return [];
+  }
+  const mem = (r, i, key) => {
+    const x = r.results[i];
+    return x && !x.na && !x.error && x[key] !== undefined ? x[key] : null;
+  };
+  const others = happy ? [base, happy] : [base];
+  const shown = [base, ...(happy ? [happy] : []), impl];
+  const lines = [
+    "",
+    "### Memory",
+    "",
+    "**Retained heap** is the JS heap plus external memory still reachable after the scenario ran (the document is " +
+    "still held, as a test would hold it), over a baseline taken after the implementation was loaded; it is read after " +
+    "a full GC, as the median over the timed iterations. **Peak RSS** is the worker process's maximum resident set size " +
+    "over the whole run, including module loading and warmups, so it also reflects garbage the GC had not yet " +
+    "reclaimed. Lower is better; ratios are the other implementation's number / rsdom's.",
+    ""
+  ];
+  const cols = ["Area", "Scenario", ...shown.map(i => `${name(i)} retained (MB)`), ...shown.map(i => `${name(i)} peak RSS (MB)`)];
+  lines.push(`| ${cols.join(" | ")} |`, `|---|---|${"--:|".repeat(cols.length - 2)}`);
+  const ratios = { retained: new Map(others.map(o => [o, []])), rss: new Map(others.map(o => [o, []])) };
+  const row = (areaCell, r) => {
+    const cells = [areaCell, `\`${r.scenario}\``];
+    for (const i of shown) {
+      const v = mem(r, i, "retainedMB");
+      cells.push(v === null ? "N/A" : fmtMB(v));
+    }
+    for (const i of shown) {
+      const v = mem(r, i, "peakRssMB");
+      cells.push(v === null ? "N/A" : String(v));
+    }
+    const mine = mem(r, impl, "retainedMB");
+    const myRss = mem(r, impl, "peakRssMB");
+    for (const o of others) {
+      const v = mem(r, o, "retainedMB");
+      if (v !== null && mine !== null && v >= 1 && mine >= 1) {
+        ratios.retained.get(o).push(v / mine);
+      }
+      const rss = mem(r, o, "peakRssMB");
+      if (rss !== null && myRss !== null) {
+        ratios.rss.get(o).push(rss / myRss);
+      }
+    }
+    lines.push(`| ${cells.join(" | ")} |`);
+  };
+  for (const [area, groups] of AREAS) {
+    results.rows.filter(r => groups.includes(r.group)).forEach((r, i) => row(i === 0 ? `**${area}**` : "", r));
+  }
+  for (const r of results.rows.filter(r => !AREAS.some(([, g]) => g.includes(r.group)))) {
+    row(r.group, r);
+  }
+  const summary = others.map(o => {
+    const ret = ratios.retained.get(o);
+    const rss = ratios.rss.get(o);
+    return `${name(o)} retains **${fmtX(geomean(ret))}** as much heap as ${name(impl)} (geometric mean over the ` +
+      `${ret.length} scenarios where both keep at least 1 MB) and peaks at **${fmtX(geomean(rss))}** its RSS`;
+  });
+  lines.push("", `${summary.join("; ")}.`);
+  return lines;
 }
 
 function main() {

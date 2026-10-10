@@ -1,7 +1,6 @@
 "use strict";
 
 const { CookieJar } = require("tough-cookie");
-const { DOMSelector } = require("@asamuzakjp/dom-selector");
 
 const NodeImpl = require("./Node-impl").implementation;
 const idlUtils = require("../../../generated/idl/utils");
@@ -51,6 +50,7 @@ const NodeIterator = require("../../../generated/idl/NodeIterator");
 const ShadowRoot = require("../../../generated/idl/ShadowRoot");
 const Range = require("../../../generated/idl/Range");
 const documents = require("../documents.js");
+const fastPathFlags = require("../helpers/fast-path-flags");
 
 const BeforeUnloadEvent = require("../../../generated/idl/BeforeUnloadEvent");
 const CompositionEvent = require("../../../generated/idl/CompositionEvent");
@@ -179,6 +179,7 @@ class DocumentImpl extends NodeImpl {
     this._initGlobalEvents();
 
     this._ownerDocument = this;
+    fastPathFlags.initDocument(this);
     this.nodeType = NODE_TYPE.DOCUMENT_NODE;
     this._parsingMode = parsingMode;
 
@@ -190,6 +191,9 @@ class DocumentImpl extends NodeImpl {
     this._byIdCache = new ByIdCache(this);
     // Created on demand by live collections; see ../helpers/mutation-journal.js.
     this._mutationJournal = null;
+    // The querySelectorAll() seed collections kept for this document's nodes, least recently used first; see
+    // ../helpers/selectors/engine.js.
+    this._selectorSeeds = null;
     this._isInDocumentTree = true;
     this._currentScript = null;
     this._pageShowingFlag = false;
@@ -233,6 +237,8 @@ class DocumentImpl extends NodeImpl {
     // "fully active": an inactive document need not be destroyed.
     // https://html.spec.whatwg.org/multipage/document-lifecycle.html#destroy-a-document
     this._isDestroyed = false;
+    // Holder for the window's initial load-event tick; see createWindow() in browser/Window.js.
+    this._pendingLoadTick = null;
     this._childDocuments = new Set();
     this._parentDocument = null;
     this._currentDocumentReadiness = readyState;
@@ -295,6 +301,9 @@ class DocumentImpl extends NodeImpl {
   // The `DOMSelector` instance is lazily created, as it is somewhat expensive to create and not always needed.
   _getDOMSelector() {
     if (!this.#domSelector) {
+      // Required here rather than at the top: loading the selector engine takes tens of milliseconds, a cost every
+      // process (e.g. every Vitest test file) would otherwise pay up front even if nothing ever needs it.
+      const { DOMSelector } = require("@asamuzakjp/dom-selector");
       this.#domSelector = new DOMSelector(this._globalObject, this._ownerDocument, {
         idlUtils
       });
@@ -1154,6 +1163,7 @@ class DocumentImpl extends NodeImpl {
     }
 
     if (oldDocument !== newDocument) {
+      fastPathFlags.adopt(oldDocument, newDocument);
       for (const inclusiveDescendant of node._shadowIncludingInclusiveDescendants()) {
         inclusiveDescendant._ownerDocument = newDocument;
 
