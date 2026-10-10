@@ -45,9 +45,14 @@ const varContainedRegEx = /(?<=[*/\s(])var\(/;
 // promoted back. Two-level maps avoid building (and hashing) a combined key string per lookup.
 const CACHE_GENERATION_SIZE = 4096;
 class ValueCache {
+  #generationSize;
   #young = new Map();
   #youngSize = 0;
   #old = new Map();
+
+  constructor(generationSize = CACHE_GENERATION_SIZE) {
+    this.#generationSize = generationSize;
+  }
 
   get(namespace, key) {
     const value = this.#young.get(namespace)?.get(key);
@@ -62,7 +67,7 @@ class ValueCache {
   }
 
   set(namespace, key, value) {
-    if (this.#youngSize >= CACHE_GENERATION_SIZE) {
+    if (this.#youngSize >= this.#generationSize) {
       this.#old = this.#young;
       this.#young = new Map();
       this.#youngSize = 0;
@@ -81,6 +86,10 @@ class ValueCache {
 const isValidPropertyValueCache = new ValueCache();
 const resolveCalcCache = new ValueCache();
 const parsePropertyValueCache = new ValueCache();
+const prepareShorthandValueCache = new ValueCache();
+const specifiedColorCache = new ValueCache();
+// Cached result standing for undefined, which ValueCache uses for a miss.
+const CACHED_UNDEFINED = Symbol("undefined");
 
 // Whether a value matches a property, and so the cached results above, only depends on the property's value
 // definition syntax. Many properties share one (e.g. the four border-*-width longhands), so key the caches by syntax
@@ -411,17 +420,53 @@ function prepareShorthandValue(val) {
   if (!val.includes("(") && !val.includes(")")) {
     return val;
   }
-  let ast;
+  // Shorthand setters call this repeatedly with the same values (e.g. the border shorthands re-parse the current
+  // shorthand values for every longhand they update), so memoize it.
+  const cachedValue = prepareShorthandValueCache.get("", val);
+  if (cachedValue !== undefined) {
+    return cachedValue === CACHED_UNDEFINED ? undefined : cachedValue;
+  }
+  let result;
   try {
-    ast = parseValue(val);
+    const ast = parseValue(val);
+    const values = [];
+    for (const node of ast.children) {
+      values.push(cssTree.generate(node));
+    }
+    result = values.join(" ");
   } catch {
-    return undefined;
+    result = undefined;
   }
-  const values = [];
-  for (const node of ast.children) {
-    values.push(cssTree.generate(node));
-  }
-  return values.join(" ");
+  prepareShorthandValueCache.set("", val, result === undefined ? CACHED_UNDEFINED : result);
+  return result;
+}
+
+/**
+ * Memoizes a shorthand property's parse function, which must be a pure function of its string argument. Shorthand
+ * setters re-parse the current shorthand values whenever one of their longhands changes, so the same values get parsed
+ * repeatedly in a row; a small cache is enough to catch that. Parsed objects and arrays are copied, as callers may
+ * modify them.
+ *
+ * @param {Function} parse - The parse function.
+ * @returns {Function} The memoized parse function.
+ */
+function memoizeShorthandParse(parse) {
+  const cache = new ValueCache(256);
+  return function memoizedParse(v) {
+    let result = cache.get("", v);
+    if (result === undefined) {
+      result = parse(v);
+      cache.set("", v, result === undefined ? CACHED_UNDEFINED : result);
+    }
+    if (result === CACHED_UNDEFINED) {
+      return undefined;
+    } else if (Array.isArray(result)) {
+      return [...result];
+    } else if (result !== null && typeof result === "object") {
+      return { ...result };
+    }
+    return result;
+  };
 }
 
 // https://drafts.csswg.org/css-syntax-3/#input-preprocessing
@@ -629,20 +674,40 @@ function serializeString(val) {
  * @param {object} [opt={ format: "specifiedValue" }] - The options for parsing.
  * @returns {string|undefined} The serialized color.
  */
+// resolveColor() is a pure function of its arguments, and for specified values (no other options) is called repeatedly
+// with the same colors by the border shorthands, so memoize that case.
+function resolveColorMemoized(color, opt) {
+  if (opt.format !== "specifiedValue") {
+    return resolveColor(color, opt);
+  }
+  for (const key in opt) {
+    if (key !== "format") {
+      return resolveColor(color, opt);
+    }
+  }
+  const cachedValue = specifiedColorCache.get("", color);
+  if (cachedValue !== undefined) {
+    return cachedValue === CACHED_UNDEFINED ? undefined : cachedValue;
+  }
+  const result = resolveColor(color, opt);
+  specifiedColorCache.set("", color, result === undefined ? CACHED_UNDEFINED : result);
+  return result;
+}
+
 function serializeColor(val, opt = { format: "specifiedValue" }) {
   const [item] = val;
   const { name, type, value } = item ?? {};
   const lowerCasedName = asciiLowercase(`${name}`);
   switch (type) {
     case AST_TYPES.FUNCTION: {
-      const res = resolveColor(`${lowerCasedName}(${value})`, opt);
+      const res = resolveColorMemoized(`${lowerCasedName}(${value})`, opt);
       if (res) {
         return res;
       }
       break;
     }
     case AST_TYPES.HASH: {
-      const res = resolveColor(`#${value}`, opt);
+      const res = resolveColorMemoized(`#${value}`, opt);
       if (res) {
         return res;
       }
@@ -655,7 +720,7 @@ function serializeColor(val, opt = { format: "specifiedValue" }) {
         }
         return resolveSystemColorValue(lowerCasedName, opt.colorScheme);
       }
-      const res = resolveColor(lowerCasedName, opt);
+      const res = resolveColorMemoized(lowerCasedName, opt);
       if (res) {
         return res;
       }
@@ -943,6 +1008,7 @@ exports.hasCalcFunc = hasCalcFunc;
 exports.hasVarFunc = hasVarFunc;
 exports.isGlobalKeyword = isGlobalKeyword;
 exports.isValidPropertyValue = isValidPropertyValue;
+exports.memoizeShorthandParse = memoizeShorthandParse;
 exports.parsePropertyValue = parsePropertyValue;
 exports.prepareShorthandValue = prepareShorthandValue;
 exports.preprocessValue = preprocessValue;

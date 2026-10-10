@@ -15,6 +15,8 @@ const shorthandFor = new Map([
   [borderLeftWidth.property, borderLeftWidth]
 ]);
 
+const parse = parsers.memoizeShorthandParse(parseUncached);
+
 const descriptor = {
   set(v, priority = "") {
     v = v.trim();
@@ -40,7 +42,7 @@ const descriptor = {
  * @param {string} v - The value to parse.
  * @returns {Array<string>|undefined} The parsed value or undefined if invalid.
  */
-function parse(v) {
+function parseUncached(v) {
   if (v === "") {
     return v;
   }
