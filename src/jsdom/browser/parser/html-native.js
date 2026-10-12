@@ -539,5 +539,6 @@ function parseIntoDocument(markup, documentImpl) {
 
 module.exports = {
   parseFragment,
-  parseIntoDocument
+  parseIntoDocument,
+  finishDetachedTree
 };

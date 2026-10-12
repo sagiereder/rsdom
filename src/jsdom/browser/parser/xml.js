@@ -1,6 +1,7 @@
 "use strict";
 
 const { SaxesParser } = require("saxes");
+const nativeParser = require("./xml-native");
 const DOMException = require("../../../generated/idl/DOMException");
 
 const { createElement } = require("../../living/helpers/create-element");
@@ -191,13 +192,16 @@ function parseFragment(markup, contextElement) {
 
   // Only parseFragment needs resolvePrefix per the saxes documentation:
   // https://github.com/lddubeau/saxes#parsing-xml-fragments
-  const parser = createParser(fragment, _globalObject, {
-    fragment: true,
-    resolvePrefix(prefix) {
-      // saxes wants undefined as the return value if the prefix is not defined, not null.
-      return contextElement.lookupNamespaceURI(prefix) || undefined;
-    }
-  });
+  function resolvePrefix(prefix) {
+    // saxes wants undefined as the return value if the prefix is not defined, not null.
+    return contextElement.lookupNamespaceURI(prefix) || undefined;
+  }
+
+  if (nativeParser.parseFragment(markup, fragment, resolvePrefix, parseDocType)) {
+    return fragment;
+  }
+
+  const parser = createParser(fragment, _globalObject, { fragment: true, resolvePrefix });
 
   parser.write(markup).close();
 
@@ -205,6 +209,10 @@ function parseFragment(markup, contextElement) {
 }
 
 function parseIntoDocument(markup, ownerDocument) {
+  if (nativeParser.parseIntoDocument(markup, ownerDocument, parseDocType)) {
+    return ownerDocument;
+  }
+
   const { _globalObject } = ownerDocument;
 
   const parser = createParser(ownerDocument, _globalObject, {
