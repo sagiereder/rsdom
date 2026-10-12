@@ -2,6 +2,7 @@
 
 const DOMException = require("../../../../generated/idl/DOMException.js");
 const csstree = require("./patched-csstree.js");
+const nativeCssParser = require("./native-css-parser.js");
 const CSSStyleSheet = require("../../../../generated/idl/CSSStyleSheet.js");
 const CSSStyleRule = require("../../../../generated/idl/CSSStyleRule.js");
 const CSSMediaRule = require("../../../../generated/idl/CSSMediaRule.js");
@@ -57,6 +58,30 @@ const STYLESHEET_AST_CACHE_MAX_ENTRIES = 512;
 const stylesheetASTCache = new Map();
 let stylesheetASTCacheChars = 0;
 
+// Parses with the native parser when it can, which gives the same tree as css-tree (with arrays for lists, see
+// native-css-parser.js), else with css-tree.
+function parseStylesheetText(text) {
+  return nativeCssParser.parse(text, nativeCssParser.STYLESHEET) ?? csstree.parse(text, STYLESHEET_PARSE_OPTIONS);
+}
+
+function parseDeclarationListText(text) {
+  return nativeCssParser.parse(text, nativeCssParser.DECLARATION_LIST) ??
+    csstree.parse(text, DECLARATION_LIST_PARSE_OPTIONS);
+}
+
+// Accessors for node lists, which are css-tree Lists or arrays.
+function listSize(list) {
+  return Array.isArray(list) ? list.length : list.size;
+}
+
+function listFirst(list) {
+  return Array.isArray(list) ? list[0] ?? null : list.first;
+}
+
+function listLast(list) {
+  return Array.isArray(list) ? list[list.length - 1] ?? null : list.last;
+}
+
 function cacheStylesheetAST(cssText, entry) {
   if (cssText.length > STYLESHEET_AST_CACHE_MAX_CHARS / 4) {
     return;
@@ -82,18 +107,23 @@ function parseIntoStyleSheet(cssText, globalObject, sheetImpl, onError) {
   let cached = stylesheetASTCache.get(cssText);
   if (cached === undefined) {
     const errors = [];
-    let ast;
-    try {
-      ast = csstree.parse(cssText, {
-        ...STYLESHEET_PARSE_OPTIONS,
-        onParseError: error => errors.push(error)
-      });
-    } catch (e) {
-      for (const error of errors) {
-        onError?.(error);
+    function onParseError(error) {
+      errors.push(error);
+    }
+    let ast = nativeCssParser.parse(cssText, nativeCssParser.STYLESHEET, onParseError);
+    if (ast === null) {
+      try {
+        ast = csstree.parse(cssText, {
+          ...STYLESHEET_PARSE_OPTIONS,
+          onParseError
+        });
+      } catch (e) {
+        for (const error of errors) {
+          onError?.(error);
+        }
+        onError?.(e);
+        return;
       }
-      onError?.(e);
-      return;
     }
     cached = { ast, errors };
     cacheStylesheetAST(cssText, cached);
@@ -152,7 +182,7 @@ function parseRule(ruleText, globalObject) {
   // unrecognized nodes (e.g. trailing garbage parsed as Raw).
   let ast;
   try {
-    ast = csstree.parse(ruleText, STYLESHEET_PARSE_OPTIONS);
+    ast = parseStylesheetText(ruleText);
   } catch {
     throw DOMException.create(globalObject, [
       "Failed to parse the rule.",
@@ -160,14 +190,14 @@ function parseRule(ruleText, globalObject) {
     ]);
   }
 
-  if (!ast.children || ast.children.size !== 1) {
+  if (!ast.children || listSize(ast.children) !== 1) {
     throw DOMException.create(globalObject, [
       "Failed to parse the rule.",
       "SyntaxError"
     ]);
   }
 
-  const rule = translateNode(ast.children.first, globalObject, null, null);
+  const rule = translateNode(listFirst(ast.children), globalObject, null, null);
   if (!rule) {
     throw DOMException.create(globalObject, [
       "Failed to parse the rule.",
@@ -192,20 +222,20 @@ function parseKeyframeRule(ruleText, globalObject) {
   const wrapped = `@keyframes _temp { ${ruleText} }`;
   let ast;
   try {
-    ast = csstree.parse(wrapped, STYLESHEET_PARSE_OPTIONS);
+    ast = parseStylesheetText(wrapped);
   } catch {
     return null;
   }
 
-  const keyframesNode = ast.children.first;
+  const keyframesNode = listFirst(ast.children);
   if (!keyframesNode || keyframesNode.type !== "Atrule" || !keyframesNode.block) {
     return null;
   }
 
-  if (keyframesNode.block.children.size !== 1) {
+  if (listSize(keyframesNode.block.children) !== 1) {
     return null;
   }
-  const keyframeNode = keyframesNode.block.children.first;
+  const keyframeNode = listFirst(keyframesNode.block.children);
   if (keyframeNode.type !== "Rule") {
     return null;
   }
@@ -239,8 +269,12 @@ function translateNode(node, globalObject, parentSheet, parentRule) {
 
 // Serializes a css-tree node. Raw nodes (which is what preludes and values are, as they are parsed with the parse*
 // options off) serialize to their source text, unless they contain a backslash, for which css-tree's generator inserts
-// a newline after a lone backslash delimiter; skip the generator's re-tokenization for the common case.
+// a newline after a lone backslash delimiter; skip the generator's re-tokenization for the common case. Nodes from the
+// native parser carry their serialization where it differs.
 function generateNode(node) {
+  if (node.generated !== undefined) {
+    return node.generated;
+  }
   if (node.type === "Raw" && !node.value.includes("\\")) {
     return node.value;
   }
@@ -354,7 +388,7 @@ function splitMisinterpretedRule(property, rawValue, globalObject, parentSheet, 
 
   let ast;
   try {
-    ast = csstree.parse(fullText, STYLESHEET_PARSE_OPTIONS);
+    ast = parseStylesheetText(fullText);
   } catch {
     return null;
   }
@@ -364,11 +398,11 @@ function splitMisinterpretedRule(property, rawValue, globalObject, parentSheet, 
   // within the declaration value (e.g. "display:hover {}") and should not be re-split.
   // When it IS the last child, csstree may have merged a nested rule and its trailing
   // declarations into one Raw value, so we must attempt re-splitting regardless.
-  if (ast.children.size <= 1 && !isLastChild) {
+  if (listSize(ast.children) <= 1 && !isLastChild) {
     return null;
   }
 
-  const ruleNode = ast.children.first;
+  const ruleNode = listFirst(ast.children);
   if (!ruleNode || ruleNode.type !== "Rule") {
     return null;
   }
@@ -403,7 +437,7 @@ function splitMisinterpretedRule(property, rawValue, globalObject, parentSheet, 
     }
     if (child.type === "Raw") {
       try {
-        const remAst = csstree.parse(child.value, DECLARATION_LIST_PARSE_OPTIONS);
+        const remAst = parseDeclarationListText(child.value);
         for (const decl of remAst.children) {
           if (decl.type === "Declaration") {
             remainingDeclarations.push(decl);
@@ -976,7 +1010,7 @@ function populateDeclarationsAndNestedRules(block, ruleImpl, globalObject, paren
       // declaration (e.g. "color:hover {} --y:2" is really rule "color:hover {}" + decl "--y:2").
       const rawValue = child.value && child.value.type === "Raw" ? child.value.value : "";
       if (!child.property.startsWith("--") && rawValue.includes("{")) {
-        const isLastChild = child === block.children.tail.data;
+        const isLastChild = child === listLast(block.children);
         const split =
           splitMisinterpretedRule(child.property, rawValue, globalObject, parentSheet, ruleImpl, isLastChild);
         if (split) {
@@ -1024,7 +1058,7 @@ function populateDeclarationsAndNestedRules(block, ruleImpl, globalObject, paren
 function parseRawAsNestedRules(rawText, globalObject, parentSheet, parentRule, allowDeclarations) {
   const rules = [];
   try {
-    const ast = csstree.parse(rawText, STYLESHEET_PARSE_OPTIONS);
+    const ast = parseStylesheetText(rawText);
     for (const child of ast.children) {
       if (child.type === "Raw") {
         if (allowDeclarations) {
@@ -1049,7 +1083,7 @@ function parseRawAsNestedRules(rawText, globalObject, parentSheet, parentRule, a
 
 function parseRawAsDeclarations(rawText, globalObject, parentSheet, parentRule) {
   try {
-    const ast = csstree.parse(rawText, DECLARATION_LIST_PARSE_OPTIONS);
+    const ast = parseDeclarationListText(rawText);
     const nestedDeclImpl = CSSNestedDeclarations.createImpl(globalObject, [], {
       parentStyleSheet: parentSheet,
       parentRule
@@ -1091,7 +1125,7 @@ function flushNestedDeclarations(declarations, globalObject, parentSheet, parent
 function parseDeclarationsAsNestedRule(text, globalObject) {
   let ast;
   try {
-    ast = csstree.parse(text, DECLARATION_LIST_PARSE_OPTIONS);
+    ast = parseDeclarationListText(text);
   } catch {
     return null;
   }
