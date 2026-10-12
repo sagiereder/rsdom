@@ -44,6 +44,10 @@ const LINK_ID_OR_NAME = 8;
 // it (live collections, memoized queries, ...), or the node has memoized queries or child lists to invalidate. Only
 // nodes with this bit need their version bumped on mutations; see `NodeImpl._invalidateCaches()`.
 const LINK_VERSION_OBSERVED = 16;
+// The node has, or had at some point after its links were allocated, a registered observer (see
+// ../helpers/mutation-observers.js). Only nodes with this bit need their registered observer list read when looking for
+// a mutation's interested observers.
+const LINK_REGISTERED_OBSERVERS = 32;
 
 // Set by NodeImpl: returns the initial flags for a node.
 let computeLinkFlags = null;
@@ -397,7 +401,7 @@ function remove(node) {
 }
 
 module.exports = {
-  LINK_ELEMENT, LINK_STEPS, LINK_CUSTOM_ELEMENT, LINK_ID_OR_NAME, LINK_VERSION_OBSERVED,
+  LINK_ELEMENT, LINK_STEPS, LINK_CUSTOM_ELEMENT, LINK_ID_OR_NAME, LINK_VERSION_OBSERVED, LINK_REGISTERED_OBSERVERS,
   setLinkFlagsComputer, ensureLinks, observeVersion,
   ChildrenIterator, DescendantsIterator, ShadowIncludingIterator,
   childrenToArray, descendantsToArray,
