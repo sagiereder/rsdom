@@ -11,7 +11,7 @@ function happyDomVersion() {
   }
 }
 
-// impl name -> { desc, env, kind, modulePath() }. "fork-js" is the fork with the Rust addon disabled.
+// impl name -> { desc, env, kind, modulePath() }.
 // kind selects the adapter in createDomFactory(): "jsdom" (JSDOM API) or "happy-dom" (Window API).
 const IMPLS = {
   "upstream": {
@@ -19,10 +19,6 @@ const IMPLS = {
   },
   "fork": {
     desc: "this repo (native enabled)", env: {}, kind: "jsdom", modulePath: () => path.join(REPO_ROOT, "src/api.js")
-  },
-  "fork-js": {
-    desc: "this repo, JSDOM_NATIVE=0", env: { JSDOM_NATIVE: "0" }, kind: "jsdom",
-    modulePath: () => path.join(REPO_ROOT, "src/api.js")
   },
   "happy-dom": {
     get desc() {

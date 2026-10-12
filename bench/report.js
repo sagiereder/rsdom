@@ -1,11 +1,13 @@
 "use strict";
-// Regenerates the "Benchmark results" section of the top-level README.md (between the
-// <!-- BENCH:START --> and <!-- BENCH:END --> markers) from a bench/run.js results file.
+// Regenerates the benchmark sections from a bench/run.js results file: the per-area summary in the top-level README.md
+// and the full per-scenario and memory tables in BENCHMARKS.md (each between <!-- BENCH:START --> and
+// <!-- BENCH:END --> markers).
 //
-//   node bench/report.js                      newest non-baseline results/*.json -> README.md
+//   node bench/report.js                      newest non-baseline results/*.json -> README.md, BENCHMARKS.md
 //   node bench/report.js results/<file>.json  a specific results file
-//   --readme <path>   README to update (default: ../README.md)
-//   --stdout          print the section instead of writing the README
+//   --readme <path>      README to update (default: ../README.md)
+//   --benchmarks <path>  full results document to update (default: ../BENCHMARKS.md)
+//   --stdout             print both sections instead of writing the files
 const fs = require("node:fs");
 const path = require("node:path");
 
@@ -31,10 +33,17 @@ const AREAS = [
 ];
 
 function parseArgs(argv) {
-  const args = { file: null, readme: path.join(__dirname, "..", "README.md"), stdout: false };
+  const args = {
+    file: null,
+    readme: path.join(__dirname, "..", "README.md"),
+    benchmarks: path.join(__dirname, "..", "BENCHMARKS.md"),
+    stdout: false
+  };
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === "--readme") {
       args.readme = path.resolve(argv[++i]);
+    } else if (argv[i] === "--benchmarks") {
+      args.benchmarks = path.resolve(argv[++i]);
     } else if (argv[i] === "--stdout") {
       args.stdout = true;
     } else {
@@ -58,20 +67,61 @@ const fmtMB = mb => (mb >= 100 ? mb.toFixed(0) : mb >= 10 ? mb.toFixed(1) : mb.t
 const fmtX = x => `${x >= 10 ? x.toFixed(1) : x.toFixed(2)}x`;
 const geomean = xs => Math.exp(xs.reduce((a, x) => a + Math.log(x), 0) / xs.length);
 
-function render(results) {
+function context(results) {
   const stat = results.stat || "median";
   const base = results.baseline || results.impls[0];
   const impl = results.impls.includes("fork") ? "fork" : results.impls.find(i => i !== base);
   // happy-dom gets its own time and speedup columns when the run included it.
   const happy = results.impls.includes("happy-dom") && impl !== "happy-dom" ? "happy-dom" : null;
-  const label = { upstream: "jsdom 30.1.2", fork: "rsdom", "fork-js": "rsdom (JSDOM_NATIVE=0)", "happy-dom": "happy-dom" };
+  const label = { upstream: "jsdom 30.1.2", fork: "rsdom", "happy-dom": "happy-dom" };
   const name = i => label[i] || i;
-  const date = results.date.slice(0, 10);
-  const { warmup, iters } = results.opts || {};
   const time = (r, i) => {
     const x = r.results[i];
     return x && !x.na && !x.error ? x[stat] : null;
   };
+  return { stat, base, impl, happy, name, time };
+}
+
+// The README summary: one row per area with the geometric-mean speedup over its scenarios, the overall geometric mean
+// and the memory summary.
+function renderSummary(results) {
+  const { base, impl, happy, name, time } = context(results);
+  const others = happy ? [base, happy] : [base];
+  const cols = ["Area", "Scenarios", ...others.map(o => `vs ${name(o)}`)];
+  const lines = [
+    `Speedup of ${name(impl)} (other implementation's time / ${name(impl)} time, geometric mean over each area's ` +
+    `scenarios; > 1 means ${name(impl)} is faster). Measured ${results.date.slice(0, 10)} on ${results.cpu}, ` +
+    `Node.js ${results.node}.`,
+    "",
+    `| ${cols.join(" | ")} |`,
+    `|---|--:|${"--:|".repeat(others.length)}`
+  ];
+  const all = new Map(others.map(o => [o, []]));
+  for (const [area, groups] of AREAS) {
+    const rows = results.rows.filter(r => groups.includes(r.group));
+    if (!rows.length) {
+      continue;
+    }
+    const cells = [area, String(rows.length)];
+    for (const o of others) {
+      const xs = rows.map(r => [time(r, o), time(r, impl)]).filter(([a, b]) => a !== null && b !== null).map(([a, b]) => a / b);
+      all.get(o).push(...xs);
+      cells.push(xs.length ? fmtX(geomean(xs)) : "N/A");
+    }
+    lines.push(`| ${cells.join(" | ")} |`);
+  }
+  lines.push(`| **All** | **${results.rows.length}** | ${others.map(o => `**${fmtX(geomean(all.get(o)))}**`).join(" | ")} |`);
+  const memory = renderMemory(results, { base, impl, happy, name });
+  if (memory.length) {
+    lines.push("", memory[memory.length - 1]);
+  }
+  return lines.join("\n");
+}
+
+function render(results) {
+  const { stat, base, impl, happy, name, time } = context(results);
+  const date = results.date.slice(0, 10);
+  const { warmup, iters } = results.opts || {};
 
   const lines = [
     `Measured ${date} on ${results.cpu} (${results.platform}), Node.js ${results.node}, rsdom at \`${results.gitRev}\`. ` +
@@ -128,7 +178,7 @@ function render(results) {
   }
   lines.push(`| ${mean.join(" | ")} |`);
   lines.push(...renderMemory(results, { base, impl, happy, name }));
-  lines.push("", "Regenerate this table with `node bench/report.js` after a full `node bench/run.js`.");
+  lines.push("", "Regenerate these tables with `node bench/report.js` after a full `node bench/run.js`.");
   return lines.join("\n");
 }
 
@@ -213,19 +263,21 @@ function main() {
   // Leave out scenarios that have since been removed from the suite.
   const current = new Set(require("./scenarios/index.js").map(s => s.name));
   results.rows = results.rows.filter(r => current.has(r.scenario));
-  const section = render(results);
-  if (args.stdout) {
-    process.stdout.write(`${section}\n`);
-    return;
+  const sections = [[args.readme, renderSummary(results)], [args.benchmarks, render(results)]];
+  for (const [doc, section] of sections) {
+    if (args.stdout) {
+      process.stdout.write(`${section}\n\n`);
+      continue;
+    }
+    const text = fs.readFileSync(doc, "utf8");
+    const s = text.indexOf(START);
+    const e = text.indexOf(END);
+    if (s === -1 || e === -1 || e < s) {
+      throw new Error(`${doc} has no ${START} ... ${END} section`);
+    }
+    fs.writeFileSync(doc, `${text.slice(0, s + START.length)}\n${section}\n${text.slice(e)}`);
+    console.log(`updated ${path.relative(process.cwd(), doc)} from ${path.relative(process.cwd(), file)}`);
   }
-  const readme = fs.readFileSync(args.readme, "utf8");
-  const s = readme.indexOf(START);
-  const e = readme.indexOf(END);
-  if (s === -1 || e === -1 || e < s) {
-    throw new Error(`${args.readme} has no ${START} ... ${END} section`);
-  }
-  fs.writeFileSync(args.readme, `${readme.slice(0, s + START.length)}\n${section}\n${readme.slice(e)}`);
-  console.log(`updated ${path.relative(process.cwd(), args.readme)} from ${path.relative(process.cwd(), file)}`);
 }
 
 main();

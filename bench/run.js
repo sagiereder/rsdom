@@ -3,7 +3,6 @@
 //
 //   node run.js                       upstream jsdom@30.1.2 vs fork (native on) vs happy-dom
 //   node run.js --mode upstream       upstream vs fork
-//   node run.js --mode native         fork-js (JSDOM_NATIVE=0) vs fork (native on)
 //   node run.js --mode happy          happy-dom vs fork
 //   node run.js --impls upstream,fork custom impl list (first one is the baseline for ratios)
 // Ratio columns are speedups (other ms / impl ms, > 1 = faster): every impl vs the baseline, plus "fork/happy"
@@ -42,7 +41,6 @@ function parseArgs(argv) {
 
 const MODES = {
   upstream: ["upstream", "fork"],
-  native: ["fork-js", "fork"],
   all: ["upstream", "fork", "happy-dom"],
   happy: ["happy-dom", "fork"]
 };
@@ -72,10 +70,9 @@ function runPair(impl, scenario, opts) {
     "--impl", impl, "--scenario", scenario.name,
     "--warmup", String(opts.warmup), "--iters", String(opts.iters), "--budget-ms", String(opts.budgetMs)
   ];
+  // rsdom is always measured with its native addon; a JSDOM_NATIVE inherited from the shell must not switch it off.
   const env = { ...process.env, ...IMPLS[impl].env };
-  if (!IMPLS[impl].env.JSDOM_NATIVE) {
-    delete env.JSDOM_NATIVE;
-  }
+  delete env.JSDOM_NATIVE;
   const r = spawnSync(process.execPath, workerArgs, {
     cwd: __dirname, env, encoding: "utf8", maxBuffer: 64 * 1024 * 1024
   });
@@ -171,14 +168,14 @@ function main() {
   }
   console.log(pad("geomean", nameW) + " ".repeat(colW * impls.length) +
     ratioCols.map(c => pad(Number.isNaN(geomeans[c.key]) ? "—" : `${geomeans[c.key].toFixed(2)}x`, colW + 2, true)).join(""));
-  const nativeFlags = impls.filter(i => IMPLS[i].kind === "jsdom")
-    .map(i => `${i}=${rows.some(r => r.results[i].native) ? "native" : "js"}`);
   console.log("(~ = noisy: spread around the median > 15%; re-run with --filter to confirm. " +
     "* = an impl diverges from jsdom, see notes)");
   for (const n of notes) {
     console.log(n);
   }
-  console.log(`\nnative addon loaded: ${nativeFlags.join(", ")}`);
+  if (impls.includes("fork") && !rows.every(r => r.results.fork.na || r.results.fork.error || r.results.fork.native)) {
+    throw new Error("rsdom ran without its native addon; build it with `node src/native/build.js` and re-run");
+  }
 
   if (!args["no-save"]) {
     const out = args.out ?

@@ -12,13 +12,12 @@ This file sets the performance targets for moving jsdom hot paths to Rust. It co
 ```sh
 source .devshim/env.sh
 cd bench && npm install          # once
-node run.js                         # upstream vs fork-js vs fork (native on) vs happy-dom
+node run.js                         # upstream vs fork vs happy-dom
 node run.js --mode upstream         # upstream vs fork
-node run.js --mode native           # fork-js (JSDOM_NATIVE=0) vs fork
 node run.js --mode happy            # happy-dom vs fork
 node run.js --filter react --quick  # subset, 1 warmup + 3 iterations
 node run.js --stat min              # rank by fastest iteration (use on a loaded machine)
-node profile.js react/testing-library-form --impl fork-js --top 40
+node profile.js react/testing-library-form --impl fork --top 40
 ```
 
 - Each (impl, scenario) pair runs in its own `node --expose-gc` child process.
