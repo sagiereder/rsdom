@@ -1,8 +1,11 @@
 "use strict";
 
-const { wrapperForImpl } = require("../../../generated/idl/utils");
 const IterableWeakList = require("../helpers/iterable-weak-list");
-const { filterRegisteredObservers, addRegisteredObserver } = require("../helpers/mutation-observers");
+const {
+  filterRegisteredObservers,
+  addRegisteredObserver,
+  setRegisteredObserverOptions
+} = require("../helpers/mutation-observers");
 
 // If we were to implement the MutationObserver by spec, the MutationObservers will not be collected by the GC because
 // all the MO are kept in a mutation observer list (https://github.com/jsdom/jsdom/pull/2398/files#r238123889). The
@@ -20,9 +23,14 @@ class MutationObserverImpl {
 
     this._callback = callback;
     this._nodeList = new IterableWeakList();
+    // MutationRecord wrappers
     this._recordQueue = [];
 
     this._id = ++mutationObserverId;
+
+    // Scratch state of queueMutationRecord()'s interested-observers walk.
+    this._interestedWalk = 0;
+    this._interestedIndex = 0;
   }
 
   // https://dom.spec.whatwg.org/#dom-mutationobserver-observe
@@ -60,12 +68,17 @@ class MutationObserverImpl {
         });
       }
 
-      existingRegisteredObserver.options = options;
+      setRegisteredObserverOptions(existingRegisteredObserver, options);
     } else {
       const registeredObserver = {
         observer: this,
-        options
+        options: null,
+        subtree: false,
+        types: 0,
+        oldValueTypes: 0,
+        attributeFilter: null
       };
+      setRegisteredObserverOptions(registeredObserver, options);
 
       addRegisteredObserver(target, registeredObserver);
 
@@ -87,8 +100,7 @@ class MutationObserverImpl {
 
   // https://dom.spec.whatwg.org/#dom-mutationobserver-takerecords
   takeRecords() {
-    // TODO: revisit if https://github.com/jsdom/webidl2js/pull/108 gets fixed.
-    const records = this._recordQueue.map(wrapperForImpl);
+    const records = this._recordQueue;
     this._recordQueue = [];
 
     return records;

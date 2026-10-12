@@ -11,15 +11,19 @@
 // * `_shadowRootsUsed`: if any node whose node document is D is a shadow root (so: in a shadow tree, a shadow host, a
 //   slot with assigned nodes, or assigned to a slot), D's flag is set. A shadow root's node document is its host's.
 // * `_rangesUsed`: if any node whose node document is D has ever been a live range boundary point, D's flag is set.
+// * `_mutationObserversUsed`: if any node whose node document is D has (or had) a registered observer, D's flag is set.
+//   A mutation's interested observers are registered on the target's inclusive ancestors, which share its node
+//   document, so without the flag queueing a mutation record has no observers to look for.
 //
 // A node's node document only changes through adoption, which moves its whole shadow-including subtree, so `adopt()`
-// carries both flags over to the new document. That covers nodes moved between windows, out of template contents, and
+// carries the flags over to the new document. That covers nodes moved between windows, out of template contents, and
 // live ranges whose boundary points end up in another document. Everything in a node tree (shadow-including) shares one
 // node document, so a node's own document's flag speaks for its whole tree.
 
 exports.initDocument = document => {
   document._shadowRootsUsed = false;
   document._rangesUsed = false;
+  document._mutationObserversUsed = false;
 };
 
 exports.noteShadowRoot = shadowRootImpl => {
@@ -30,6 +34,10 @@ exports.noteRangeBoundary = nodeImpl => {
   nodeImpl._ownerDocument._rangesUsed = true;
 };
 
+exports.noteRegisteredObserver = nodeImpl => {
+  nodeImpl._ownerDocument._mutationObserversUsed = true;
+};
+
 // Called when nodes move from `oldDocument` to `newDocument`.
 exports.adopt = (oldDocument, newDocument) => {
   if (oldDocument._shadowRootsUsed) {
@@ -37,6 +45,9 @@ exports.adopt = (oldDocument, newDocument) => {
   }
   if (oldDocument._rangesUsed) {
     newDocument._rangesUsed = true;
+  }
+  if (oldDocument._mutationObserversUsed) {
+    newDocument._mutationObserversUsed = true;
   }
 };
 
