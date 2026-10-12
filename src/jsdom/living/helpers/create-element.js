@@ -324,5 +324,6 @@ module.exports = {
   internalCreateElementNSSteps,
 
   getValidTagNames,
-  getHTMLElementInterface
+  getHTMLElementInterface,
+  getSVGInterface
 };

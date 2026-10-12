@@ -7,3 +7,4 @@ pub fn native_version() -> String {
 
 pub mod css_parser;
 pub mod html_parser;
+pub mod xml_parser;
