@@ -1,0 +1,27 @@
+{
+  "name": "@rsdom/core-wasm32-wasi",
+  "version": "0.1.1",
+  "description": "The WebAssembly build of rsdom's Rust core, used where no prebuilt native binary is available",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sagiereder/rsdom.git"
+  },
+  "main": "index.js",
+  "files": [
+    "index.js",
+    "loader.js",
+    "rsdom.wasm32-wasi.wasm"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {
+    "@emnapi/core": "2.0.0-beta.1",
+    "@emnapi/runtime": "2.0.0-beta.1",
+    "@tybys/wasm-util": "^0.10.4"
+  },
+  "engines": {
+    "node": "^22.22.2 || ^24.15.0 || >=26.0.0"
+  }
+}
