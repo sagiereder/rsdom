@@ -11,6 +11,7 @@ const { asciiLowercase } = require("../helpers/strings");
 const computedStyle = require("./helpers/computed-style");
 const cssValues = require("./helpers/css-values");
 const csstree = require("./helpers/patched-csstree");
+const nativeCssParser = require("./helpers/native-css-parser");
 const fontSizes = require("./helpers/font-sizes");
 const {
   borderProperties,
@@ -227,7 +228,8 @@ class CSSStyleDeclarationImpl {
     this.#shapeNode = shapeRoot;
     this.#updating = true;
     text = cssValues.preprocessValue(text);
-    const valueObj = csstree.parse(text, { context: "declarationList", parseValue: false });
+    const valueObj = nativeCssParser.parse(text, nativeCssParser.DECLARATION_LIST_RAW_CUSTOM_PROPERTIES) ??
+      csstree.parse(text, { context: "declarationList", parseValue: false });
     if (valueObj?.children) {
       const properties = new Map();
       let shouldSkipNext = false;
