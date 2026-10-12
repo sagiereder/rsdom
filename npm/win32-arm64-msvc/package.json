@@ -1,0 +1,26 @@
+{
+  "name": "@rsdom/core-win32-arm64-msvc",
+  "version": "0.1.1",
+  "description": "The aarch64-pc-windows-msvc binary for rsdom, a jsdom fork with a Rust core",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sagiereder/rsdom.git"
+  },
+  "main": "rsdom.win32-arm64-msvc.node",
+  "files": [
+    "rsdom.win32-arm64-msvc.node"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "os": [
+    "win32"
+  ],
+  "cpu": [
+    "arm64"
+  ],
+  "engines": {
+    "node": "^22.22.2 || ^24.15.0 || >=26.0.0"
+  }
+}

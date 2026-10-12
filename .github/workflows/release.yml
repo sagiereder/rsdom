@@ -1,9 +1,10 @@
 name: Release
 
 # Pushing a tag v<version> (matching package.json's version) builds the native addon for every platform in
-# scripts/release/platforms.js and publishes:
+# scripts/release/platforms.js, and the WebAssembly build, and publishes:
 #   - @rsdom/core-<platform> (npm/<platform>/), one per prebuilt binary;
-#   - @rsdom/core, with those packages added as optionalDependencies;
+#   - @rsdom/core-wasm32-wasi (npm/wasm32-wasi/), the WebAssembly build, used where no prebuilt binary is installed;
+#   - @rsdom/core, with the binary packages added as optionalDependencies and the WebAssembly one as a dependency;
 #   - @rsdom/jest, @rsdom/vitest and vitest-environment-rsdom (packages/*/).
 # Running the workflow by hand builds everything and does a `npm publish --dry-run` rehearsal instead.
 # Publishing uses npm trusted publishing (OIDC): no token secret. Every package must have a trusted publisher for
@@ -54,10 +55,26 @@ jobs:
             # A Node addon is a cdylib, which musl's default static CRT can't produce.
             rustflags: -C target-feature=-crt-static
             smoke: docker-alpine
+          - platform: linux-arm64-musl
+            os: ubuntu-latest
+            target: aarch64-unknown-linux-musl
+            zig: true
+            rustflags: -C target-feature=-crt-static
+            smoke: docker-alpine-arm64
           - platform: win32-x64-msvc
             os: windows-latest
             target: x86_64-pc-windows-msvc
             smoke: native
+          - platform: win32-arm64-msvc
+            os: windows-11-arm
+            target: aarch64-pc-windows-msvc
+            smoke: native
+          # The WebAssembly build links emnapi from the devDependencies (npm ci below).
+          - platform: wasm32-wasi
+            os: ubuntu-latest
+            target: wasm32-wasip1
+            file: rsdom.wasm32-wasi.wasm
+            smoke: wasm
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -70,6 +87,9 @@ jobs:
         with:
           workspaces: src/native -> target
           key: ${{ matrix.target }}
+      - if: matrix.smoke == 'wasm'
+        name: Install emnapi (devDependencies)
+        run: npm ci --ignore-scripts
       - if: matrix.zig
         uses: mlugg/setup-zig@v2
         with:
@@ -86,11 +106,16 @@ jobs:
           node src/native/build.js
           --target ${{ matrix.build-target || matrix.target }}
           ${{ matrix.zig && '--zig' || '' }}
-          --out dist/rsdom.${{ matrix.platform }}.node
+          --out dist/${{ matrix.file || format('rsdom.{0}.node', matrix.platform) }}
       - name: Smoke test (load the addon)
         if: matrix.smoke == 'native'
         shell: bash
         run: node -e "const a = require('./dist/rsdom.${{ matrix.platform }}.node'); if (!a) process.exit(1); console.log(Object.keys(a))"
+      - name: Smoke test (instantiate the WebAssembly module)
+        if: matrix.smoke == 'wasm'
+        run: >-
+          node -e "const a = require('./npm/wasm32-wasi/loader.js').load('dist/${{ matrix.file }}');
+          console.log(Object.keys(a), a.parseHtmlDocument('<p>ok', true).ops.length)"
       - name: Smoke test (load the addon on Alpine)
         if: matrix.smoke == 'docker-alpine'
         run: >-
@@ -102,10 +127,16 @@ jobs:
           docker run --rm --privileged tonistiigi/binfmt --install arm64
           docker run --rm --platform linux/arm64 -v "$PWD/dist:/dist" node:24-bookworm-slim \
             node -e "console.log(Object.keys(require('/dist/rsdom.${{ matrix.platform }}.node')))"
+      - name: Smoke test (load the addon on Alpine arm64 under QEMU)
+        if: matrix.smoke == 'docker-alpine-arm64'
+        run: |
+          docker run --rm --privileged tonistiigi/binfmt --install arm64
+          docker run --rm --platform linux/arm64 -v "$PWD/dist:/dist" node:24-alpine \
+            node -e "console.log(Object.keys(require('/dist/rsdom.${{ matrix.platform }}.node')))"
       - uses: actions/upload-artifact@v5
         with:
           name: bindings-${{ matrix.platform }}
-          path: dist/rsdom.${{ matrix.platform }}.node
+          path: dist/${{ matrix.file || format('rsdom.{0}.node', matrix.platform) }}
           if-no-files-found: error
 
   publish:
@@ -138,7 +169,7 @@ jobs:
         with:
           pattern: bindings-*
           path: artifacts
-      - name: Copy binaries into npm/<platform>/
+      - name: Copy binaries into npm/<platform>/ and npm/wasm32-wasi/
         run: node scripts/release/platform-packages.js copy artifacts
       - name: Publish
         shell: bash
@@ -159,7 +190,8 @@ jobs:
             fi
           }
 
-          # Platform packages first, so @rsdom/core's optionalDependencies resolve as soon as it is published.
+          # Platform packages (and the WebAssembly one) first, so @rsdom/core's dependencies resolve as soon as it is
+          # published.
           for dir in npm/*/; do publish "${dir%/}"; done
           node scripts/release/platform-packages.js prepublish
           publish .

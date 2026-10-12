@@ -1,0 +1,3 @@
+# @rsdom/core-win32-arm64-msvc
+
+The `aarch64-pc-windows-msvc` native addon for rsdom ([@rsdom/core](https://www.npmjs.com/package/@rsdom/core)). Don't install it directly: @rsdom/core lists it as an optional dependency, and npm installs the one that matches your platform.
