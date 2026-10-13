@@ -22,58 +22,58 @@ rsdom is always benchmarked with its native addon; `run.js` refuses to report a 
 ## Results
 
 <!-- BENCH:START -->
-Measured 2026-10-10 on Apple M4 (darwin arm64), Node.js v24.21.0, rsdom at `c7588533`. Each number is the min of 10 timed iterations after 3 warmups, every scenario in a fresh process; a speedup is the other implementation's time / rsdom time (> 1 means rsdom is faster).
+Measured 2026-10-13 on Apple M4 (darwin arm64), Node.js v24.21.0, rsdom at `52e8fb48`. Each number is the min of 10 timed iterations after 3 warmups, every scenario in a fresh process; a speedup is the other implementation's time / rsdom time (> 1 means rsdom is faster).
 
 | Area | Scenario | jsdom 30.1.2 (ms) | happy-dom (ms) | rsdom (ms) | vs jsdom 30.1.2 | vs happy-dom |
 |---|---|--:|--:|--:|--:|--:|
-| **Simple divs and lists** | `divs/create-dom-api` | 58.4 | 92.3 | 11.4 | 5.12x | 8.09x |
-|  | `divs/innerHTML` | 171 | 151 | 36.2 | 4.74x | 4.17x |
-|  | `lists/create-dom-api` | 49.0 | 73.6 | 13.0 | 3.78x | 5.68x |
-|  | `lists/innerHTML` | 99.9 | 63.4 | 16.0 | 6.25x | 3.97x |
-|  | `lists/query-iterate-read` | 95.1 | 121 | 40.2 | 2.37x | 3.01x |
-| **Large documents** | `large/innerHTML-parse` | 333 | 251 | 48.4 | 6.88x | 5.19x |
-|  | `large/jsdom-full-parse` | 253 | 269 | 48.8 | 5.18x | 5.51x |
-|  | `large/serialize-outerHTML` | 71.8 | 140 | 19.6 | 3.67x | 7.14x |
-|  | `large/serialize-dom` | 61.0 | 144 | 20.2 | 3.02x | 7.16x |
-|  | `large/cloneNode-deep` | 220 | 226 | 21.5 | 10.2x | 10.5x |
-| **Tables** | `tables/parse-innerHTML` | 365 | 311 | 59.8 | 6.10x | 5.19x |
-|  | `tables/rows-cells-access` | 83.3 | 152 | 32.3 | 2.58x | 4.69x |
-|  | `tables/nth-child-query` | 143 | 160 | 16.5 | 8.67x | 9.74x |
-|  | `tables/sort-rows` | 116 | N/A | 22.7 | 5.10x | N/A |
-|  | `tables/serialize` | 77.4 | 242 | 21.8 | 3.55x | 11.1x |
-| **Selectors** | `selectors/complex-qsa` | 117 | 68.6 | 14.5 | 8.05x | 4.72x |
-|  | `selectors/querySelector-many` | 1442 | 340 | 120 | 12.0x | 2.83x |
-|  | `selectors/live-collections` | 112 | 336 | 12.4 | 9.07x | 27.1x |
-|  | `selectors/matches-closest` | 111 | 26.8 | 5.73 | 19.4x | 4.67x |
-| **Events and style** | `events/bubble-deep` | 129 | 144 | 61.9 | 2.08x | 2.33x |
-|  | `events/many-targets-delegation` | 1595 | 22.8 | 20.9 | 76.3x | 1.09x |
-|  | `style/inline-set` | 151 | 445 | 68.0 | 2.22x | 6.54x |
-|  | `style/computed-style` | 2074 | 170 | 37.7 | 54.9x | 4.50x |
-|  | `style/css-in-js-inject` | 266 | 153 | 55.0 | 4.84x | 2.78x |
-|  | `style/css-in-js-insertRule` | 662 | 379 | 106 | 6.23x | 3.56x |
-|  | `style/computed-after-mutation` | 782 | 242 | 91.0 | 8.60x | 2.66x |
-| **React** | `react/render-dashboard` | 41.2 | 59.6 | 23.7 | 1.74x | 2.51x |
-|  | `react/updates` | 149 | 185 | 111 | 1.34x | 1.66x |
-|  | `react/unmount` | 36.9 | 69.8 | 10.6 | 3.50x | 6.62x |
-|  | `react/complex-app` | 747 | 1059 | 468 | 1.60x | 2.26x |
-|  | `react/testing-library-form` | 248 | 106 | 68.9 | 3.60x | 1.54x |
-| **Accessibility queries and user-event** | `a11y/getByRole-page` | 1414 | 628 | 126 | 11.2x | 4.99x |
-|  | `a11y/user-event-flow` | 291 | 153 | 136 | 2.15x | 1.13x |
-| **Web components** | `webcomponents/shadow-render` | 132 | 59.8 | 44.5 | 2.96x | 1.34x |
-| **Mutation observers** | `mutation/observed-updates` | 178 | 206 | 126 | 1.41x | 1.63x |
-|  | `mutation/synthetic-10k` | 88.5 | 40.7 | 44.9 | 1.97x | 0.91x |
-| **Template rendering** | `template/clone-render` | 83.0 | 99.3 | 17.7 | 4.68x | 5.60x |
-|  | `template/lit-render` | 97.4 | 125 | 19.2 | 5.06x | 6.49x |
-| **Forms** | `forms/big-form` | 220 | 395 | 51.3 | 4.30x | 7.70x |
-| **Window startup** | `startup/window-per-test` | 330 | 286 | 270 | 1.22x | 1.06x |
-|  | `startup/window-per-test-scripts` | 379 | 292 | 304 | 1.25x | 0.96x |
-| **Real page parsing** | `parse/real-page` | 40.8 | 23.0 | 8.71 | 4.69x | 2.64x |
-|  | `parse/real-page-serialize` | 51.5 | 67.7 | 32.6 | 1.58x | 2.08x |
-|  | `parse/real-page-selectors` | 62.7 | 27.7 | 8.71 | 7.19x | 3.18x |
-| **XML and SVG** | `xml/domparser-svg` | 77.5 | N/A | 45.3 | 1.71x | N/A |
-|  | `xml/serializer-roundtrip` | 168 | N/A | 121 | 1.39x | N/A |
-|  | `xml/getElementsByTagNameNS` | 118 | N/A | 61.0 | 1.93x | N/A |
-|  | **Geometric mean** |  |  |  | **4.27x** | **3.66x** |
+| **Simple divs and lists** | `divs/create-dom-api` | 57.6 | 88.4 | 10.3 | 5.58x | 8.55x |
+|  | `divs/innerHTML` | 200 | 162 | 39.5 | 5.06x | 4.10x |
+|  | `lists/create-dom-api` | 52.7 | 83.3 | 14.0 | 3.75x | 5.93x |
+|  | `lists/innerHTML` | 107 | 66.3 | 19.2 | 5.54x | 3.45x |
+|  | `lists/query-iterate-read` | 103 | 121 | 40.8 | 2.53x | 2.98x |
+| **Large documents** | `large/innerHTML-parse` | 322 | 249 | 46.4 | 6.94x | 5.36x |
+|  | `large/jsdom-full-parse` | 253 | 268 | 48.2 | 5.24x | 5.56x |
+|  | `large/serialize-outerHTML` | 74.0 | 154 | 20.8 | 3.55x | 7.42x |
+|  | `large/serialize-dom` | 68.5 | 147 | 20.6 | 3.33x | 7.17x |
+|  | `large/cloneNode-deep` | 219 | 232 | 20.8 | 10.6x | 11.2x |
+| **Tables** | `tables/parse-innerHTML` | 365 | 330 | 62.5 | 5.84x | 5.27x |
+|  | `tables/rows-cells-access` | 86.7 | 161 | 37.9 | 2.29x | 4.25x |
+|  | `tables/nth-child-query` | 149 | 171 | 19.0 | 7.88x | 9.00x |
+|  | `tables/sort-rows` | 115 | N/A | 28.0 | 4.10x | N/A |
+|  | `tables/serialize` | 86.1 | 199 | 21.5 | 4.00x | 9.23x |
+| **Selectors** | `selectors/complex-qsa` | 78.8 | 48.3 | 9.45 | 8.33x | 5.11x |
+|  | `selectors/querySelector-many` | 866 | 218 | 73.8 | 11.7x | 2.95x |
+|  | `selectors/live-collections` | 69.3 | 221 | 7.46 | 9.29x | 29.6x |
+|  | `selectors/matches-closest` | 72.1 | 17.1 | 4.03 | 17.9x | 4.26x |
+| **Events and style** | `events/bubble-deep` | 82.2 | 86.9 | 40.9 | 2.01x | 2.12x |
+|  | `events/many-targets-delegation` | 952 | 14.6 | 10.3 | 92.6x | 1.42x |
+|  | `style/inline-set` | 98.8 | 279 | 47.5 | 2.08x | 5.87x |
+|  | `style/computed-style` | 1246 | 190 | 42.7 | 29.2x | 4.46x |
+|  | `style/css-in-js-inject` | 275 | 167 | 54.7 | 5.02x | 3.06x |
+|  | `style/css-in-js-insertRule` | 674 | 394 | 115 | 5.87x | 3.44x |
+|  | `style/computed-after-mutation` | 765 | 248 | 92.9 | 8.24x | 2.67x |
+| **React** | `react/render-dashboard` | 46.7 | 68.0 | 30.1 | 1.55x | 2.26x |
+|  | `react/updates` | 166 | 209 | 128 | 1.30x | 1.64x |
+|  | `react/unmount` | 37.9 | 75.9 | 11.8 | 3.20x | 6.41x |
+|  | `react/complex-app` | 801 | 1184 | 521 | 1.54x | 2.27x |
+|  | `react/testing-library-form` | 265 | 124 | 82.9 | 3.20x | 1.50x |
+| **Accessibility queries and user-event** | `a11y/getByRole-page` | 1457 | 632 | 144 | 10.1x | 4.40x |
+|  | `a11y/user-event-flow` | 290 | 153 | 140 | 2.07x | 1.09x |
+| **Web components** | `webcomponents/shadow-render` | 138 | 66.5 | 45.0 | 3.07x | 1.48x |
+| **Mutation observers** | `mutation/observed-updates` | 178 | 211 | 132 | 1.35x | 1.60x |
+|  | `mutation/synthetic-10k` | 89.1 | 50.1 | 47.0 | 1.89x | 1.06x |
+| **Template rendering** | `template/clone-render` | 104 | 121 | 21.2 | 4.91x | 5.73x |
+|  | `template/lit-render` | 119 | 156 | 29.0 | 4.09x | 5.37x |
+| **Forms** | `forms/big-form` | 244 | 443 | 61.2 | 3.98x | 7.24x |
+| **Window startup** | `startup/window-per-test` | 387 | 376 | 271 | 1.43x | 1.39x |
+|  | `startup/window-per-test-scripts` | 355 | 395 | 282 | 1.26x | 1.40x |
+| **Real page parsing** | `parse/real-page` | 39.6 | 22.4 | 7.09 | 5.59x | 3.16x |
+|  | `parse/real-page-serialize` | 49.2 | 65.6 | 30.8 | 1.60x | 2.13x |
+|  | `parse/real-page-selectors` | 59.6 | 26.8 | 8.27 | 7.21x | 3.24x |
+| **XML and SVG** | `xml/domparser-svg` | 71.7 | N/A | 11.7 | 6.12x | N/A |
+|  | `xml/serializer-roundtrip` | 182 | N/A | 90.0 | 2.02x | N/A |
+|  | `xml/getElementsByTagNameNS` | 128 | N/A | 73.5 | 1.74x | N/A |
+|  | **Geometric mean** |  |  |  | **4.29x** | **3.70x** |
 
 ### Memory
 
@@ -81,55 +81,55 @@ Measured 2026-10-10 on Apple M4 (darwin arm64), Node.js v24.21.0, rsdom at `c758
 
 | Area | Scenario | jsdom 30.1.2 retained (MB) | happy-dom retained (MB) | rsdom retained (MB) | jsdom 30.1.2 peak RSS (MB) | happy-dom peak RSS (MB) | rsdom peak RSS (MB) |
 |---|---|--:|--:|--:|--:|--:|--:|
-| **Simple divs and lists** | `divs/create-dom-api` | 53.6 (3.12x) | 174 (10.1x) | 17.2 | 590 (2.99x) | 440 (2.23x) | 197 |
-|  | `divs/innerHTML` | 63.5 (2.66x) | 227 (9.53x) | 23.9 | 710 (2.63x) | 507 (1.88x) | 270 |
-|  | `lists/create-dom-api` | 38.2 (1.03x) | 123 (3.32x) | 37.1 | 451 (1.71x) | 366 (1.39x) | 264 |
-|  | `lists/innerHTML` | 30.9 (2.53x) | 111 (9.05x) | 12.2 | 456 (2.56x) | 360 (2.02x) | 178 |
-|  | `lists/query-iterate-read` | 178 (7.10x) | 133 (5.29x) | 25.1 | 544 (1.50x) | 489 (1.35x) | 362 |
-| **Large documents** | `large/innerHTML-parse` | 103 (2.97x) | 373 (10.8x) | 34.7 | 985 (3.07x) | 691 (2.15x) | 321 |
-|  | `large/jsdom-full-parse` | 103 (2.97x) | 373 (10.8x) | 34.6 | 959 (2.60x) | 691 (1.87x) | 369 |
-|  | `large/serialize-outerHTML` | 103 (3.10x) | 374 (11.3x) | 33.1 | 972 (2.56x) | 1050 (2.77x) | 379 |
-|  | `large/serialize-dom` | 103 (3.10x) | 374 (11.3x) | 33.1 | 970 (2.56x) | 1050 (2.77x) | 379 |
-|  | `large/cloneNode-deep` | 201 (3.38x) | 749 (12.6x) | 59.5 | 1668 (4.23x) | 1525 (3.87x) | 394 |
-| **Tables** | `tables/parse-innerHTML` | 133 (3.21x) | 470 (11.3x) | 41.5 | 1244 (3.43x) | 820 (2.26x) | 363 |
-|  | `tables/rows-cells-access` | 145 (1.50x) | 493 (5.08x) | 96.9 | 1261 (2.21x) | 1319 (2.31x) | 570 |
-|  | `tables/nth-child-query` | 357 (7.81x) | 523 (11.4x) | 45.7 | 1482 (2.45x) | 1353 (2.23x) | 606 |
-|  | `tables/sort-rows` | 146 (1.01x) | N/A | 144 | 1280 (2.14x) | N/A | 599 |
-|  | `tables/serialize` | 141 (3.00x) | 481 (10.2x) | 47.1 | 1253 (2.97x) | 1303 (3.09x) | 422 |
-| **Selectors** | `selectors/complex-qsa` | 51.3 (5.86x) | 67.3 (7.68x) | 8.76 | 393 (2.01x) | 341 (1.74x) | 196 |
-|  | `selectors/querySelector-many` | 26.1 (2.81x) | 74.2 (8.00x) | 9.28 | 343 (1.95x) | 353 (2.01x) | 176 |
-|  | `selectors/live-collections` | 24.2 (1.60x) | 76.1 (5.04x) | 15.1 | 315 (1.74x) | 354 (1.96x) | 181 |
-|  | `selectors/matches-closest` | 25.3 (2.79x) | 67.0 (7.38x) | 9.08 | 390 (2.19x) | 362 (2.03x) | 178 |
-| **Events and style** | `events/bubble-deep` | 3.73 (1.01x) | 1.66 (0.45x) | 3.69 | 190 (1.09x) | 118 (0.68x) | 174 |
-|  | `events/many-targets-delegation` | 22.9 (0.98x) | 9.28 (0.40x) | 23.3 | 275 (1.32x) | 187 (0.89x) | 209 |
-|  | `style/inline-set` | 20.5 (0.74x) | 32.2 (1.17x) | 27.6 | 371 (1.22x) | 302 (0.99x) | 305 |
-|  | `style/computed-style` | 46.4 (0.97x) | 40.7 (0.85x) | 47.8 | 334 (1.14x) | 298 (1.02x) | 293 |
-|  | `style/css-in-js-inject` | 38.3 (0.89x) | 33.8 (0.79x) | 43.1 | 335 (1.13x) | 262 (0.88x) | 297 |
-|  | `style/css-in-js-insertRule` | 29.1 (0.86x) | 56.8 (1.67x) | 34.0 | 334 (1.08x) | 294 (0.95x) | 310 |
-|  | `style/computed-after-mutation` | 20.1 (0.58x) | 24.6 (0.71x) | 34.7 | 309 (1.08x) | 271 (0.95x) | 285 |
-| **React** | `react/render-dashboard` | 18.9 (0.92x) | 43.7 (2.13x) | 20.5 | 259 (1.29x) | 278 (1.39x) | 200 |
-|  | `react/updates` | 21.0 (0.93x) | 44.8 (1.98x) | 22.6 | 331 (1.20x) | 434 (1.58x) | 275 |
-|  | `react/unmount` | 5.41 (0.39x) | 3.86 (0.28x) | 13.8 | 505 (1.28x) | 1013 (2.56x) | 395 |
-|  | `react/complex-app` | 2.19 (0.21x) | 2.27 (0.22x) | 10.5 | 554 (1.38x) | 908 (2.26x) | 402 |
-|  | `react/testing-library-form` | 14.6 (0.59x) | 8.54 (0.34x) | 24.8 | 290 (1.07x) | 249 (0.92x) | 270 |
-| **Accessibility queries and user-event** | `a11y/getByRole-page` | 70.4 (1.38x) | 132 (2.59x) | 50.9 | 478 (1.39x) | 451 (1.31x) | 345 |
-|  | `a11y/user-event-flow` | 18.1 (0.77x) | 7.94 (0.34x) | 23.6 | 302 (1.19x) | 272 (1.07x) | 254 |
-| **Web components** | `webcomponents/shadow-render` | 62.6 (2.55x) | 64.5 (2.63x) | 24.5 | 449 (1.47x) | 311 (1.02x) | 305 |
-| **Mutation observers** | `mutation/observed-updates` | 35.3 (1.55x) | 46.4 (2.04x) | 22.7 | 379 (1.37x) | 439 (1.58x) | 277 |
-|  | `mutation/synthetic-10k` | 4.28 (0.87x) | 2.65 (0.54x) | 4.90 | 266 (1.10x) | 247 (1.02x) | 241 |
-| **Template rendering** | `template/clone-render` | 132 (11.7x) | 98.7 (8.74x) | 11.3 | 476 (2.51x) | 355 (1.87x) | 190 |
-|  | `template/lit-render` | 2.57 (1.33x) | 4.79 (2.48x) | 1.94 | 275 (1.22x) | 913 (4.04x) | 226 |
-| **Forms** | `forms/big-form` | 10.7 (1.60x) | 50.8 (7.63x) | 6.65 | 291 (1.63x) | 321 (1.79x) | 179 |
-| **Window startup** | `startup/window-per-test` | 10.2 (2.79x) | 0.76 | 3.65 | 1779 (3.83x) | 256 (0.55x) | 464 |
-|  | `startup/window-per-test-scripts` | 10.8 (1.48x) | 0.94 | 7.24 | 2040 (2.76x) | 281 (0.38x) | 740 |
-| **Real page parsing** | `parse/real-page` | 15.8 (1.07x) | 31.8 (2.15x) | 14.8 | 265 (1.53x) | 249 (1.44x) | 173 |
-|  | `parse/real-page-serialize` | 14.2 (0.94x) | 31.8 (2.11x) | 15.1 | 327 (1.55x) | 312 (1.48x) | 211 |
-|  | `parse/real-page-selectors` | 60.8 (4.00x) | 36.1 (2.38x) | 15.2 | 355 (1.80x) | 301 (1.53x) | 197 |
-| **XML and SVG** | `xml/domparser-svg` | 2.56 | N/A | 0.00 | 278 (1.60x) | N/A | 174 |
-|  | `xml/serializer-roundtrip` | 28.1 (1.80x) | N/A | 15.6 | 311 (1.18x) | N/A | 263 |
-|  | `xml/getElementsByTagNameNS` | 22.3 (4.97x) | N/A | 4.48 | 296 (1.10x) | N/A | 269 |
+| **Simple divs and lists** | `divs/create-dom-api` | 53.5 (3.07x) | 174 (9.99x) | 17.4 | 591 (3.03x) | 440 (2.26x) | 195 |
+|  | `divs/innerHTML` | 63.5 (2.75x) | 227 (9.83x) | 23.1 | 711 (2.68x) | 505 (1.91x) | 265 |
+|  | `lists/create-dom-api` | 38.3 (1.90x) | 123 (6.13x) | 20.1 | 451 (1.92x) | 366 (1.56x) | 235 |
+|  | `lists/innerHTML` | 30.9 (2.61x) | 111 (9.35x) | 11.8 | 456 (2.61x) | 360 (2.06x) | 175 |
+|  | `lists/query-iterate-read` | 178 (7.34x) | 133 (5.47x) | 24.3 | 544 (1.52x) | 489 (1.37x) | 357 |
+| **Large documents** | `large/innerHTML-parse` | 103 (3.11x) | 373 (11.3x) | 33.1 | 984 (2.91x) | 692 (2.05x) | 338 |
+|  | `large/jsdom-full-parse` | 103 (3.12x) | 373 (11.3x) | 33.0 | 958 (2.68x) | 690 (1.93x) | 357 |
+|  | `large/serialize-outerHTML` | 103 (3.26x) | 374 (11.9x) | 31.5 | 971 (2.96x) | 1049 (3.20x) | 328 |
+|  | `large/serialize-dom` | 103 (3.26x) | 374 (11.9x) | 31.5 | 971 (2.95x) | 1049 (3.19x) | 329 |
+|  | `large/cloneNode-deep` | 201 (3.56x) | 749 (13.3x) | 56.5 | 1668 (4.51x) | 1526 (4.12x) | 370 |
+| **Tables** | `tables/parse-innerHTML` | 133 (3.39x) | 470 (12.0x) | 39.3 | 1243 (3.43x) | 819 (2.26x) | 362 |
+|  | `tables/rows-cells-access` | 145 (1.47x) | 493 (4.98x) | 98.9 | 1263 (2.26x) | 1316 (2.36x) | 558 |
+|  | `tables/nth-child-query` | 357 (8.20x) | 523 (12.0x) | 43.6 | 1482 (2.46x) | 1356 (2.25x) | 602 |
+|  | `tables/sort-rows` | 146 (0.79x) | N/A | 185 | 1281 (2.10x) | N/A | 610 |
+|  | `tables/serialize` | 141 (3.15x) | 481 (10.7x) | 44.9 | 1252 (3.00x) | 1298 (3.11x) | 418 |
+| **Selectors** | `selectors/complex-qsa` | 51.3 (6.12x) | 67.3 (8.02x) | 8.39 | 392 (2.01x) | 344 (1.76x) | 195 |
+|  | `selectors/querySelector-many` | 26.0 (3.02x) | 74.2 (8.60x) | 8.63 | 405 (2.33x) | 358 (2.06x) | 174 |
+|  | `selectors/live-collections` | 24.2 (0.96x) | 76.2 (3.03x) | 25.2 | 381 (2.19x) | 356 (2.05x) | 174 |
+|  | `selectors/matches-closest` | 25.3 (2.83x) | 67.0 (7.48x) | 8.96 | 389 (2.24x) | 360 (2.07x) | 174 |
+| **Events and style** | `events/bubble-deep` | 3.73 (1.01x) | 1.61 (0.44x) | 3.68 | 189 (1.08x) | 118 (0.67x) | 175 |
+|  | `events/many-targets-delegation` | 22.9 (1.04x) | 9.23 (0.42x) | 22.0 | 306 (1.49x) | 188 (0.91x) | 206 |
+|  | `style/inline-set` | 20.5 (0.74x) | 32.2 (1.16x) | 27.7 | 370 (1.21x) | 301 (0.98x) | 306 |
+|  | `style/computed-style` | 46.4 (1.02x) | 40.6 (0.89x) | 45.6 | 393 (1.35x) | 281 (0.96x) | 292 |
+|  | `style/css-in-js-inject` | 38.7 (0.99x) | 33.8 (0.87x) | 39.0 | 334 (1.14x) | 262 (0.90x) | 292 |
+|  | `style/css-in-js-insertRule` | 29.5 (0.94x) | 56.8 (1.81x) | 31.5 | 334 (1.10x) | 294 (0.96x) | 305 |
+|  | `style/computed-after-mutation` | 20.1 (0.60x) | 24.6 (0.74x) | 33.3 | 309 (1.10x) | 272 (0.97x) | 281 |
+| **React** | `react/render-dashboard` | 18.6 (0.91x) | 43.7 (2.13x) | 20.5 | 259 (1.29x) | 277 (1.39x) | 200 |
+|  | `react/updates` | 21.0 (0.92x) | 44.8 (1.96x) | 22.9 | 331 (1.19x) | 439 (1.58x) | 277 |
+|  | `react/unmount` | 5.78 (0.42x) | 3.85 (0.28x) | 13.8 | 506 (1.29x) | 1014 (2.59x) | 392 |
+|  | `react/complex-app` | 2.51 (0.22x) | 2.27 (0.20x) | 11.4 | 540 (1.31x) | 896 (2.18x) | 411 |
+|  | `react/testing-library-form` | 14.8 (0.56x) | 8.71 (0.33x) | 26.3 | 291 (1.08x) | 248 (0.92x) | 269 |
+| **Accessibility queries and user-event** | `a11y/getByRole-page` | 70.5 (1.49x) | 132 (2.78x) | 47.4 | 479 (1.42x) | 449 (1.33x) | 337 |
+|  | `a11y/user-event-flow` | 18.5 (0.79x) | 7.83 (0.34x) | 23.3 | 298 (1.17x) | 272 (1.07x) | 254 |
+| **Web components** | `webcomponents/shadow-render` | 62.4 (2.89x) | 64.5 (2.98x) | 21.6 | 451 (1.58x) | 310 (1.08x) | 286 |
+| **Mutation observers** | `mutation/observed-updates` | 35.6 (1.56x) | 46.4 (2.03x) | 22.8 | 379 (1.38x) | 441 (1.60x) | 275 |
+|  | `mutation/synthetic-10k` | 4.28 (1.10x) | 2.60 (0.67x) | 3.87 | 265 (1.12x) | 247 (1.05x) | 236 |
+| **Template rendering** | `template/clone-render` | 132 (12.3x) | 98.7 (9.18x) | 10.7 | 476 (2.57x) | 345 (1.86x) | 185 |
+|  | `template/lit-render` | 2.53 (1.32x) | 4.79 (2.50x) | 1.91 | 276 (1.23x) | 914 (4.08x) | 224 |
+| **Forms** | `forms/big-form` | 10.7 (1.65x) | 50.8 (7.87x) | 6.45 | 292 (1.66x) | 321 (1.82x) | 176 |
+| **Window startup** | `startup/window-per-test` | 10.2 (2.87x) | 0.77 | 3.56 | 1778 (3.77x) | 252 (0.53x) | 472 |
+|  | `startup/window-per-test-scripts` | 10.8 (1.52x) | 0.99 | 7.08 | 2039 (2.77x) | 239 (0.32x) | 736 |
+| **Real page parsing** | `parse/real-page` | 15.8 (1.09x) | 31.4 (2.17x) | 14.4 | 266 (1.55x) | 247 (1.44x) | 172 |
+|  | `parse/real-page-serialize` | 14.1 (0.96x) | 31.7 (2.17x) | 14.6 | 330 (1.60x) | 311 (1.51x) | 206 |
+|  | `parse/real-page-selectors` | 60.8 (4.08x) | 36.2 (2.43x) | 14.9 | 334 (1.72x) | 301 (1.55x) | 194 |
+| **XML and SVG** | `xml/domparser-svg` | 3.07 | N/A | 0.00 | 276 (1.78x) | N/A | 155 |
+|  | `xml/serializer-roundtrip` | 28.6 (2.34x) | N/A | 12.2 | 310 (1.18x) | N/A | 262 |
+|  | `xml/getElementsByTagNameNS` | 22.3 (4.79x) | N/A | 4.65 | 297 (1.18x) | N/A | 252 |
 
-jsdom 30.1.2 retains **1.72x** as much heap as rsdom (geometric mean over the 46 scenarios where both keep at least 1 MB) and peaks at **1.75x** its RSS; happy-dom retains **2.82x** as much heap as rsdom (geometric mean over the 41 scenarios where both keep at least 1 MB) and peaks at **1.54x** its RSS.
+jsdom 30.1.2 retains **1.78x** as much heap as rsdom (geometric mean over the 46 scenarios where both keep at least 1 MB) and peaks at **1.81x** its RSS; happy-dom retains **2.92x** as much heap as rsdom (geometric mean over the 41 scenarios where both keep at least 1 MB) and peaks at **1.56x** its RSS.
 
 Regenerate these tables with `node bench/report.js` after a full `node bench/run.js`.
 <!-- BENCH:END -->

@@ -107,27 +107,27 @@ The upstream npm scripts (`npm run test:api`, `test:wpt`, `test:tuwpt`, `test:to
 rsdom is **4.3x faster than jsdom** and **3.7x faster than happy-dom** across the benchmark suite (geometric mean), and uses less memory. The suite covers simple divs and lists, large documents, huge tables, selectors, events, styles, and React apps with Testing Library, using React's development builds as Jest and Vitest do. Gains are largest on selectors, computed styles and event handling. They are smallest on window startup and mutation observers, where happy-dom is about as fast.
 
 <!-- BENCH:START -->
-Speedup of rsdom (other implementation's time / rsdom time, geometric mean over each area's scenarios; > 1 means rsdom is faster). Measured 2026-10-10 on Apple M4, Node.js v24.21.0.
+Speedup of rsdom (other implementation's time / rsdom time, geometric mean over each area's scenarios; > 1 means rsdom is faster). Measured 2026-10-13 on Apple M4, Node.js v24.21.0.
 
 | Area | Scenarios | vs jsdom 30.1.2 | vs happy-dom |
 |---|--:|--:|--:|
-| Simple divs and lists | 5 | 4.23x | 4.70x |
-| Large documents | 5 | 5.26x | 6.87x |
-| Tables | 5 | 4.77x | 7.17x |
-| Selectors | 4 | 11.4x | 6.41x |
-| Events and style | 7 | 9.07x | 2.96x |
-| React | 5 | 2.16x | 2.49x |
-| Accessibility queries and user-event | 2 | 4.91x | 2.37x |
-| Web components | 1 | 2.96x | 1.34x |
-| Mutation observers | 2 | 1.67x | 1.22x |
-| Template rendering | 2 | 4.87x | 6.03x |
-| Forms | 1 | 4.30x | 7.70x |
-| Window startup | 2 | 1.23x | 1.01x |
-| Real page parsing | 3 | 3.76x | 2.59x |
-| XML and SVG | 3 | 1.66x | N/A |
-| **All** | **47** | **4.27x** | **3.66x** |
+| Simple divs and lists | 5 | 4.31x | 4.63x |
+| Large documents | 5 | 5.39x | 7.07x |
+| Tables | 5 | 4.44x | 6.57x |
+| Selectors | 4 | 11.3x | 6.60x |
+| Events and style | 7 | 8.31x | 3.01x |
+| React | 5 | 1.99x | 2.41x |
+| Accessibility queries and user-event | 2 | 4.58x | 2.19x |
+| Web components | 1 | 3.07x | 1.48x |
+| Mutation observers | 2 | 1.60x | 1.30x |
+| Template rendering | 2 | 4.48x | 5.55x |
+| Forms | 1 | 3.98x | 7.24x |
+| Window startup | 2 | 1.34x | 1.40x |
+| Real page parsing | 3 | 4.01x | 2.79x |
+| XML and SVG | 3 | 2.78x | N/A |
+| **All** | **47** | **4.29x** | **3.70x** |
 
-jsdom 30.1.2 retains **1.72x** as much heap as rsdom (geometric mean over the 46 scenarios where both keep at least 1 MB) and peaks at **1.75x** its RSS; happy-dom retains **2.82x** as much heap as rsdom (geometric mean over the 41 scenarios where both keep at least 1 MB) and peaks at **1.54x** its RSS.
+jsdom 30.1.2 retains **1.78x** as much heap as rsdom (geometric mean over the 46 scenarios where both keep at least 1 MB) and peaks at **1.81x** its RSS; happy-dom retains **2.92x** as much heap as rsdom (geometric mean over the 41 scenarios where both keep at least 1 MB) and peaks at **1.56x** its RSS.
 <!-- BENCH:END -->
 
 Every scenario, the memory tables and how to run the suite: [BENCHMARKS.md](BENCHMARKS.md).
