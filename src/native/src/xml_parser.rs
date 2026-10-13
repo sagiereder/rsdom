@@ -1233,8 +1233,9 @@ thread_local! {
 
 /// Parses an XML document, or with `resolve_prefix`, a fragment. Returns null when the input must be parsed by saxes
 /// instead (see the module comment). Otherwise, returns the extra strings, and writes the instruction stream to `out`
-/// if it fits; if not, `out[0]` is set to 0 and the stream is returned by the next take_xml_ops() call. Reusing the
-/// caller's buffer avoids creating a typed array per parse, which dominates the cost of parsing small inputs.
+/// if it fits; if not, `out[0]` is set to 0 (unless `out` is empty) and the stream is returned by the next take_xml_ops()
+/// call. Reusing the caller's buffer avoids creating a typed array per parse, which dominates the cost of parsing small
+/// inputs. The caller sizes `out` with xml_ops_buffer_length().
 #[napi]
 pub fn parse_xml(
   markup: Utf16String,
@@ -1249,13 +1250,23 @@ pub fn parse_xml(
       if ops.len() <= out.len() {
         out[..ops.len()].copy_from_slice(&ops);
       } else {
-        out[0] = 0;
+        if let Some(first) = out.first_mut() {
+          *first = 0;
+        }
         OVERFLOW.with(|overflow| *overflow.borrow_mut() = ops);
       }
       Some(Utf16String::from(extra))
     }
     Err(Bail) => None,
   }
+}
+
+/// The length of the buffer to pass to parse_xml(). In the WebAssembly build it is 0, so that every stream is returned
+/// by take_xml_ops(): there, a typed array argument is a copy in the module's memory (emnapi copies it in), and writes
+/// to it never reach the caller's array.
+#[napi]
+pub fn xml_ops_buffer_length() -> u32 {
+  if cfg!(target_family = "wasm") { 0 } else { 8192 }
 }
 
 /// The instruction stream of the last parse_xml() call whose stream did not fit in its buffer.

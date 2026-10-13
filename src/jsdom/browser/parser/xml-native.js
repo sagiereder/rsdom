@@ -59,8 +59,8 @@ const ORDER_SENSITIVE_NAMES = new Set(["script", "iframe", "frame", "object", "e
 
 // The instruction stream is written to a reusable buffer when it fits, which is much cheaper than creating a typed
 // array per parse for small inputs. A parse that runs script (in the slow replay) can parse XML again, so the buffer
-// is taken while a parse uses it.
-const BUFFER_LENGTH = 8192;
+// is taken while a parse uses it. The addon picks the length (0 in the WebAssembly build, which cannot write to it).
+const BUFFER_LENGTH = native.xmlOpsBufferLength();
 let spareBuffer = new Uint32Array(BUFFER_LENGTH);
 
 // Returns { ops, extra, buffer }, or null if the native parser declined the input. The caller passes `buffer` to
@@ -73,7 +73,7 @@ function parseNative(markup, resolvePrefix) {
     spareBuffer = buffer;
     return null;
   }
-  return { ops: buffer[0] === 0 ? native.takeXmlOps() : buffer, extra, buffer };
+  return { ops: buffer.length === 0 || buffer[0] === 0 ? native.takeXmlOps() : buffer, extra, buffer };
 }
 
 function releaseBuffer(buffer) {
