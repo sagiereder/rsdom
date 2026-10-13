@@ -43,7 +43,12 @@ exports.createWindow = options => {
   const makeVMContext = options.settings.runScripts === "outside-only" || options.settings.runScripts === "dangerously";
 
   // Bootstrap with an empty object from the Node.js realm. We'll muck with its prototype chain shortly.
-  let window = {};
+  //
+  // The object is created in V8's dictionary ("slow") properties mode up front. A window ends up with several hundred
+  // own properties and a replaced prototype, which puts it in dictionary mode anyway; starting there avoids V8 first
+  // building, and then throwing away, a long chain of hidden-class transitions for every window. This has no observable
+  // effect: the prototype is Object.prototype exactly as with `{}`, until it's replaced below.
+  let window = Object.setPrototypeOf(Object.create(null), Object.prototype);
 
   // Make window into a global object: either via vm, or just aliasing the Node.js globals.
   // Also set _globalObject and _globalProxy.
@@ -56,9 +61,19 @@ exports.createWindow = options => {
     window._globalObject = window;
     window._globalProxy = vm.runInContext("this", window);
 
-    // Without this, these globals will only appear to scripts running inside the context using vm.runScript; they will
-    // not appear to scripts running from the outside, including to JSDOM implementation code.
+    // Make sure these globals appear as own properties of the global object with the expected attributes, so that
+    // scripts running from the outside, including JSDOM implementation code, see them. With DONT_CONTEXTIFY the new
+    // context's global object already has them as ordinary own data properties, so normally nothing needs doing; only
+    // fall back to fetching the value from inside the context (one vm.runInContext() call each, which is comparatively
+    // expensive) for a global that is missing or whose attributes differ.
     for (const [globalName, globalPropDesc] of jsGlobalEntriesToInstall) {
+      const existing = Object.getOwnPropertyDescriptor(window, globalName);
+      if (existing !== undefined && "value" in existing &&
+          existing.writable === globalPropDesc.writable &&
+          existing.enumerable === globalPropDesc.enumerable &&
+          existing.configurable === globalPropDesc.configurable) {
+        continue;
+      }
       const propDesc = { ...globalPropDesc, value: vm.runInContext(globalName, window) };
       Object.defineProperty(window, globalName, propDesc);
     }

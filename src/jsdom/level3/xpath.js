@@ -35,7 +35,36 @@
 const idlUtils = require("../../generated/idl/utils");
 const { observeVersion } = require("../living/helpers/dom-tree");
 
-module.exports = core => {
+// The XPath engine (tokenizer, parser, axes, functions and evaluator) below is stateless and doesn't depend on the
+// window, so it is built once per process rather than once per window. Only the DOM interface objects at the end of
+// this file (XPathException, XPathEvaluator, XPathExpression, XPathResult) are created per window.
+//
+// The one thing the engine needs from a window is the XPathException that the window exposes, which it uses to
+// construct the errors it throws. The per-window entry points into the engine set it for the duration of the call (see
+// enterWindow() below), so the engine behaves exactly as if it had been created for that window. Outside of such a
+// call it falls back to an identical, window-independent XPathException.
+function DefaultXPathException(code, message) {
+  var e = new Error(message);
+  e.name = 'XPathException';
+  e.code = code;
+  return e;
+}
+DefaultXPathException.INVALID_EXPRESSION_ERR = 51;
+DefaultXPathException.TYPE_ERR = 52;
+
+var XPathException = DefaultXPathException;
+
+function enterWindow(windowXPathException) {
+  var previous = XPathException;
+  XPathException = windowXPathException;
+  return previous;
+}
+
+function leaveWindow(previous) {
+  XPathException = previous;
+}
+
+var engine = (function () {
   var xpath = {};
 
   // Helper function to deal with the migration of Attr to no longer have a nodeName property despite this codebase
@@ -1678,9 +1707,41 @@ module.exports = core => {
     return val;
   }
 
+  return { xpath: xpath, astFactory: astFactory, fn: fn };
+})();
+
+// The engine internals used by the per-window DOM interface code.
+var Stream = engine.xpath.Stream;
+var parse = engine.xpath.parse;
+var Evaluator = engine.xpath.Evaluator;
+var astFactory = engine.astFactory;
+var fn = engine.fn;
+var sharedXPath = engine.xpath;
+
+module.exports = core => {
   /***************************************************************************
    *                           DOM interface                                 *
    ***************************************************************************/
+  var xpath = Object.create(sharedXPath);
+
+  // Engine entry points for tests, run as if called from this window.
+  xpath.parse = function parse(stream, a) {
+    var previous = enterWindow(XPathException);
+    try {
+      return sharedXPath.parse(stream, a);
+    } finally {
+      leaveWindow(previous);
+    }
+  };
+  xpath.evaluate = function evaluate(expr, doc, context) {
+    var previous = enterWindow(XPathException);
+    try {
+      return sharedXPath.evaluate(expr, doc, context);
+    } finally {
+      leaveWindow(previous);
+    }
+  };
+
   var XPathException = xpath.XPathException = function XPathException(code, message) {
     var e = new Error(message);
     e.name = 'XPathException';
@@ -1707,8 +1768,13 @@ module.exports = core => {
 
 
   var XPathExpression = xpath.XPathExpression = function XPathExpression(expression, resolver, optDoc) {
-    var stream = new Stream(expression);
-    this._ast = parse(stream, astFactory);
+    var previous = enterWindow(XPathException);
+    try {
+      var stream = new Stream(expression);
+      this._ast = parse(stream, astFactory);
+    } finally {
+      leaveWindow(previous);
+    }
     this._doc = optDoc;
   }
   XPathExpression.prototype = {
@@ -1721,14 +1787,23 @@ module.exports = core => {
             core.DOMException.WRONG_DOCUMENT_ERR,
             'The document must be the same as the context node\'s document.');
       }
-      var evaluator = new Evaluator(doc);
-      var value = evaluator.val(this._ast, {nodes: [contextNode]});
-      if (XPathResult.NUMBER_TYPE === type)
-        value = fn.number(value);
-      else if (XPathResult.STRING_TYPE === type)
-        value = fn.string(value);
-      else if (XPathResult.BOOLEAN_TYPE === type)
-        value = fn['boolean'](value);
+      var previous = enterWindow(XPathException);
+      try {
+        var evaluator = new Evaluator(doc);
+        var value = evaluator.val(this._ast, {nodes: [contextNode]});
+        if (XPathResult.NUMBER_TYPE === type)
+          value = fn.number(value);
+        else if (XPathResult.STRING_TYPE === type)
+          value = fn.string(value);
+        else if (XPathResult.BOOLEAN_TYPE === type)
+          value = fn['boolean'](value);
+      } finally {
+        leaveWindow(previous);
+      }
+      if (XPathResult.NUMBER_TYPE === type ||
+          XPathResult.STRING_TYPE === type ||
+          XPathResult.BOOLEAN_TYPE === type)
+        ; // already converted above
       else if (XPathResult.ANY_TYPE !== type &&
                XPathResult.UNORDERED_NODE_ITERATOR_TYPE !== type &&
                XPathResult.ORDERED_NODE_ITERATOR_TYPE !== type &&
