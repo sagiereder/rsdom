@@ -96,4 +96,11 @@ pub trait TokenSink {
     fn adjusted_current_node_present_but_not_in_html_namespace(&self) -> bool {
         false
     }
+
+    /// jsdom: the location of the token about to be processed (only with `TokenizerOpts::source_locations`).
+    fn source_location(&self, _location: &crate::interface::SourceTokenLocation) {}
+
+    /// jsdom: parse5 counts a line twice from the given position on (only with `TokenizerOpts::source_locations`). See
+    /// `SourceLocationEvent::ExtraLine`.
+    fn source_extra_line(&self, _at: crate::interface::SourcePoint) {}
 }

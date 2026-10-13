@@ -1,7 +1,7 @@
 //! Decoding HTML bytes for jsdom: encoding sniffing and decoding (with encoding_rs), so that bytes go to the native
 //! HTML parser without first becoming a JS string.
 //!
-//! The sniffing is a port of html-encoding-sniffer (what jsdom uses without the addon), quirks included, so both give
+//! The sniffing is a port of html-encoding-sniffer (what jsdom uses), quirks included, so both give
 //! the same `document.characterSet`: https://html.spec.whatwg.org/multipage/parsing.html#encoding-sniffing-algorithm
 //! (BOM, then the transport-layer label, then the prescan; the caller supplies the default). Decoding follows
 //! https://encoding.spec.whatwg.org/#decode (a BOM overrides the given encoding and is stripped), like
@@ -382,5 +382,5 @@ pub fn parse_html_document_bytes(
   if text.is_empty() || (decline_if_scripts && scripts_may_run(&text)) {
     return Some(Either::B(text.into_owned()));
   }
-  Some(Either::A(parse_document_str(&text, scripting_enabled)))
+  Some(Either::A(parse_document_str(&text, scripting_enabled, false, false)))
 }

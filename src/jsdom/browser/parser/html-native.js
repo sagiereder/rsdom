@@ -1,7 +1,8 @@
 "use strict";
 // Native (Rust/html5ever) HTML parsing. The addon parses the whole input in one call and returns a flat instruction
 // stream (see src/native/src/html_parser.rs) that is replayed here, performing exactly the operations that jsdom's
-// parse5 tree adapter (./html.js) performs, in the same order.
+// parse5 tree adapter performed (parse5 was jsdom's HTML parser; tests/differential/ compares the results with it), in
+// the same order.
 
 const { legacyHookDecode } = require("@exodus/bytes/encoding.js");
 const native = require("../../native");
@@ -36,6 +37,15 @@ const OP_POP = 10;
 const OP_DOCTYPE = 11;
 const OP_MODE = 12;
 const OP_ADD_ATTRS = 13;
+const OP_FOSTER_APPEND = 14;
+const OP_FOSTER_TEXT = 15;
+const OP_LOC_TOKEN = 16;
+const OP_LOC_ELEMENT = 17;
+const OP_LOC_NODE = 18;
+const OP_LOC_DOCTYPE = 19;
+const OP_LOC_NULL = 20;
+const OP_LOC_TEXT = 21;
+const OP_LOC_END = 22;
 
 const NONE = 0xFFFFFFFF;
 
@@ -47,11 +57,84 @@ const NAMESPACES = [null, HTML_NS, SVG_NS, MATHML_NS, XLINK_NS, XML_NS, XMLNS_NS
 const MODES = ["no-quirks", "quirks", "limited-quirks"];
 const NS_CODES = new Map([[HTML_NS, 1], [SVG_NS, 2], [MATHML_NS, 3]]);
 
-// Lone surrogates cannot cross the UTF-8 boundary to Rust losslessly.
-const loneSurrogate = /\p{Surrogate}/u;
+// Lone surrogates (possible in a JS string, e.g. from innerHTML) are not Unicode scalar values, so they cannot cross
+// the UTF-8 boundary to Rust. The parser treats every character other than a few ASCII ones and U+0000 alike, and never
+// changes a lone surrogate, so each distinct one is replaced by a stand-in BMP character that is not otherwise in the
+// input and that nothing else in the parse can produce (character references are checked below; named ones never
+// expand into the pools, nor does anything else the tokenizer substitutes), and mapped back in the result. Both are one
+// UTF-16 code unit, so the string offsets in the result are unaffected.
+const loneSurrogates = /\p{Surrogate}/gu;
+const numericCharacterReferences = /&#(?:[xX]([0-9a-fA-F]+)|([0-9]+))/g;
+// Ranges with no case mapping, no special meaning to the parser, and no named character reference expanding into them.
+const STAND_IN_POOLS = [
+  [0x4E00, 0x9FFF], // CJK Unified Ideographs
+  [0xAC00, 0xD7A3], // Hangul Syllables
+  [0x3400, 0x4DBF], // CJK Unified Ideographs Extension A
+  [0xE000, 0xF8FF] // Private Use Area
+];
 
-function canUseNative(markup) {
-  return native !== null && !loneSurrogate.test(markup);
+// Returns { markup, restore } where `restore` maps the result's strings back, or undefined if the markup has no lone
+// surrogate.
+function replaceLoneSurrogates(markup) {
+  const surrogates = markup.match(loneSurrogates);
+  if (surrogates === null) {
+    return undefined;
+  }
+
+  const used = new Uint8Array(0x10000);
+  for (let i = 0; i < markup.length; i++) {
+    used[markup.charCodeAt(i)] = 1;
+  }
+  for (const [, hex, decimal] of markup.matchAll(numericCharacterReferences)) {
+    const value = hex === undefined ? Number.parseInt(decimal, 10) : Number.parseInt(hex, 16);
+    if (value < 0x10000) {
+      used[value] = 1;
+    }
+  }
+
+  const toStandIn = new Map();
+  const fromStandIn = new Map();
+  let pool = 0;
+  let next = STAND_IN_POOLS[0][0];
+  for (const surrogate of surrogates) {
+    if (toStandIn.has(surrogate)) {
+      continue;
+    }
+    while (used[next] === 1 || next > STAND_IN_POOLS[pool][1]) {
+      if (next > STAND_IN_POOLS[pool][1]) {
+        pool++;
+        if (pool === STAND_IN_POOLS.length) {
+          throw new Error("rsdom: cannot parse HTML containing this many distinct lone surrogates together with " +
+            "characters from all the ranges used to represent them");
+        }
+        next = STAND_IN_POOLS[pool][0];
+      } else {
+        next++;
+      }
+    }
+    const standIn = String.fromCharCode(next++);
+    toStandIn.set(surrogate, standIn);
+    fromStandIn.set(standIn, surrogate);
+  }
+
+  const standIns = new RegExp(`[${[...fromStandIn.keys()].join("")}]`, "g");
+  return {
+    markup: markup.replace(loneSurrogates, surrogate => toStandIn.get(surrogate)),
+    restore(result) {
+      result.strings = result.strings.replace(standIns, standIn => fromStandIn.get(standIn));
+    }
+  };
+}
+
+// Calls `parse` (one of the native parse functions) with the markup as its first argument.
+function parseNative(parse, markup, ...args) {
+  const replaced = replaceLoneSurrogates(markup);
+  if (replaced === undefined) {
+    return parse(markup, ...args);
+  }
+  const result = parse(replaced.markup, ...args);
+  replaced.restore(result);
+  return result;
 }
 
 // The name table follows the instructions; ops[0] holds its index.
@@ -106,22 +189,27 @@ function replay(result, names, documentImpl, isFragment, root, fast, poppedScrip
     return new TextImpl(globalObject, [], { data: text, ownerDocument: ownerDocument() });
   }
 
+  // Each returns the Text node the text went into.
   const insertText = fast ?
     (parentNode, text) => {
       const lastChild = parentNode._links?.lastChild;
       if (lastChild && lastChild.nodeType === nodeTypes.TEXT_NODE) {
         lastChild._data += text;
-      } else {
-        treeHelpers.appendChild(parentNode, createText(text));
+        return lastChild;
       }
+      const node = createText(text);
+      treeHelpers.appendChild(parentNode, node);
+      return node;
     } :
     (parentNode, text) => {
       const { lastChild } = parentNode;
       if (lastChild && lastChild.nodeType === nodeTypes.TEXT_NODE) {
         lastChild.data += text;
-      } else {
-        parentNode._append(createText(text));
+        return lastChild;
       }
+      const node = createText(text);
+      parentNode._append(node);
+      return node;
     };
 
   const insertTextBefore = fast ?
@@ -129,18 +217,38 @@ function replay(result, names, documentImpl, isFragment, root, fast, poppedScrip
       const { previousSibling } = referenceNode;
       if (previousSibling && previousSibling.nodeType === nodeTypes.TEXT_NODE) {
         previousSibling._data += text;
-      } else {
-        treeHelpers.insertBefore(referenceNode, createText(text));
+        return previousSibling;
       }
+      const node = createText(text);
+      treeHelpers.insertBefore(referenceNode, node);
+      return node;
     } :
     (referenceNode, text) => {
       const { previousSibling } = referenceNode;
       if (previousSibling && previousSibling.nodeType === nodeTypes.TEXT_NODE) {
         previousSibling.data += text;
-      } else {
-        referenceNode.parentNode._insert(createText(text), referenceNode);
+        return previousSibling;
       }
+      const node = createText(text);
+      referenceNode.parentNode._insert(node, referenceNode);
+      return node;
     };
+
+  // Source locations (only with the parser's `locations` option): the token locations defined so far, the Text node
+  // last inserted into, and the last doctype.
+  const locationTokens = [];
+  let lastText = null;
+  let lastDoctype = null;
+  function readLocation(j) {
+    return {
+      startLine: ops[j],
+      startCol: ops[j + 1],
+      startOffset: ops[j + 2],
+      endLine: ops[j + 3],
+      endCol: ops[j + 4],
+      endOffset: ops[j + 5]
+    };
+  }
 
   const append = fast ?
     (parent, child) => {
@@ -308,7 +416,7 @@ function replay(result, names, documentImpl, isFragment, root, fast, poppedScrip
         break;
       case OP_APPEND_TEXT: {
         const off = ops[i + 2];
-        insertText(nodes[ops[i + 1]], strings.slice(off, off + ops[i + 3]));
+        lastText = insertText(nodes[ops[i + 1]], strings.slice(off, off + ops[i + 3]));
         i += 4;
         break;
       }
@@ -319,7 +427,7 @@ function replay(result, names, documentImpl, isFragment, root, fast, poppedScrip
       }
       case OP_INSERT_TEXT_BEFORE: {
         const off = ops[i + 2];
-        insertTextBefore(nodes[ops[i + 1]], strings.slice(off, off + ops[i + 3]));
+        lastText = insertTextBefore(nodes[ops[i + 1]], strings.slice(off, off + ops[i + 3]));
         i += 4;
         break;
       }
@@ -365,6 +473,7 @@ function replay(result, names, documentImpl, isFragment, root, fast, poppedScrip
           name, publicId, systemId, ownerDocument: ownerDocument()
         });
         append(nodes[0], documentType);
+        lastDoctype = documentType;
         i += 7;
         break;
       }
@@ -375,6 +484,88 @@ function replay(result, names, documentImpl, isFragment, root, fast, poppedScrip
       case OP_ADD_ATTRS:
         i = setAttributes(nodes[ops[i + 1]], i + 3, ops[i + 2]);
         break;
+      // Live mode: https://html.spec.whatwg.org/#appropriate-place-for-inserting-a-node, foster parenting: before the
+      // table if it has a parent now, otherwise into the element before it on the stack of open elements.
+      case OP_FOSTER_APPEND: {
+        const table = nodes[ops[i + 1]];
+        const child = nodes[ops[i + 3]];
+        if (table.parentNode !== null) {
+          insertBefore(table, child);
+        } else {
+          append(nodes[ops[i + 2]], child);
+        }
+        i += 4;
+        break;
+      }
+      case OP_FOSTER_TEXT: {
+        const table = nodes[ops[i + 1]];
+        const off = ops[i + 3];
+        const text = strings.slice(off, off + ops[i + 4]);
+        lastText = table.parentNode !== null ? insertTextBefore(table, text) : insertText(nodes[ops[i + 2]], text);
+        i += 5;
+        break;
+      }
+      // Source locations, as parse5's sourceCodeLocationInfo option gives them (and jsdom's parse5 tree adapter set
+      // them): objects with the same properties, in the same order, shared the same way.
+      case OP_LOC_TOKEN: {
+        const location = readLocation(i + 1);
+        const attrCount = ops[i + 7];
+        i += 8;
+        if (attrCount > 0) {
+          location.attrs = Object.create(null);
+          for (let a = 0; a < attrCount; a++, i += 7) {
+            location.attrs[names[ops[i]]] = readLocation(i + 1);
+          }
+        }
+        locationTokens.push(location);
+        break;
+      }
+      case OP_LOC_ELEMENT: {
+        const location = locationTokens[ops[i + 2]];
+        nodes[ops[i + 1]].sourceCodeLocation = { ...location, startTag: location };
+        i += 3;
+        break;
+      }
+      case OP_LOC_NODE:
+        nodes[ops[i + 1]].sourceCodeLocation = locationTokens[ops[i + 2]];
+        i += 3;
+        break;
+      case OP_LOC_DOCTYPE:
+        lastDoctype.sourceCodeLocation = locationTokens[ops[i + 1]];
+        i += 2;
+        break;
+      case OP_LOC_NULL:
+        nodes[ops[i + 1]].sourceCodeLocation = null;
+        i += 2;
+        break;
+      case OP_LOC_TEXT: {
+        const location = locationTokens[ops[i + 1]];
+        if (lastText.sourceCodeLocation) {
+          const { endLine, endCol, endOffset } = location;
+          Object.assign(lastText.sourceCodeLocation, { endLine, endCol, endOffset });
+        } else {
+          lastText.sourceCodeLocation = location;
+        }
+        i += 2;
+        break;
+      }
+      case OP_LOC_END: {
+        const location = locationTokens[ops[i + 2]];
+        Object.assign(nodes[ops[i + 1]].sourceCodeLocation, ops[i + 3] === 1 ?
+          {
+            endTag: { ...location },
+            endLine: location.endLine,
+            endCol: location.endCol,
+            endOffset: location.endOffset
+          } :
+          {
+            endLine: location.startLine,
+            endCol: location.startCol,
+            endOffset: location.startOffset
+          });
+        i += 4;
+        break;
+      }
       default:
         throw new Error(`Internal error: unknown native HTML parser instruction ${ops[i]}`);
     }
@@ -433,12 +624,8 @@ function scriptingEnabled(documentImpl) {
   return documentImpl._parseOptions.scriptingEnabled !== false;
 }
 
-// Returns the DocumentFragment, or undefined if the native parser cannot be used for this input.
+// Returns the DocumentFragment.
 function parseFragment(markup, contextElement, ownerDocument) {
-  if (!canUseNative(markup)) {
-    return undefined;
-  }
-
   // parse5 identifies the context element by its qualified name (and only treats it as HTML in the HTML namespace).
   const contextNS = NS_CODES.get(contextElement._namespaceURI) ?? 0;
   let contextAIP = false;
@@ -459,7 +646,8 @@ function parseFragment(markup, contextElement, ownerDocument) {
     }
   }
 
-  const result = native.parseHtmlFragment(
+  const result = parseNative(
+    native.parseHtmlFragment,
     markup,
     contextElement._qualifiedName,
     contextNS,
@@ -482,10 +670,17 @@ function parseFragment(markup, contextElement, ownerDocument) {
 
 const scriptsMayRunPattern = /<(?:script|iframe|frame|object|embed)/i;
 
-// Script can run in the middle of parsing (inline scripts executing when popped, custom element constructors, nested
-// browsing contexts). Replaying the instruction stream is faithful to parse5's sequence of tree operations, but parse5
-// consults the live DOM when making tree construction decisions, which script could have modified. Keep the
-// incremental parse5 path whenever that is possible.
+// Whether script can run in the middle of parsing this document: inline scripts executing when popped, custom element
+// constructors, nested browsing contexts loading. Such script can change the tree while it is being built, and some
+// tree construction steps (foster parenting, merging text into the preceding Text node) depend on the tree as it is
+// then. The whole input is still parsed up front (script cannot add to it: document.write() during parsing inserts its
+// markup itself, see Document-impl.js), but in "live" mode the parser describes those steps by their conditions, which
+// the replay evaluates against the live tree, as an incremental parser would.
+function scriptMayRun(markup, documentImpl) {
+  return (scriptsMayRun(documentImpl) && scriptsMayRunPattern.test(markup)) || customElementsDefined(documentImpl);
+}
+
+// Whether the document runs scripts at all (the markup decides whether any can run while parsing).
 function scriptsMayRun(documentImpl) {
   const window = documentImpl._defaultView;
   return Boolean(window) && window._settings.runScripts === "dangerously";
@@ -499,24 +694,24 @@ function customElementsDefined(documentImpl) {
   return Boolean(registry) && registry._customElementDefinitions.length > 0;
 }
 
-// Returns true if the document was parsed natively; false if the caller must fall back to parse5.
 function parseIntoDocument(markup, documentImpl) {
-  if (!canUseNative(markup) || documentImpl._parseOptions.sourceCodeLocationInfo) {
-    return false;
-  }
-  if ((scriptsMayRun(documentImpl) && scriptsMayRunPattern.test(markup)) || customElementsDefined(documentImpl)) {
-    return false;
-  }
-
-  replayDocument(native.parseHtmlDocument(markup, scriptingEnabled(documentImpl)), documentImpl);
-  return true;
+  const live = scriptMayRun(markup, documentImpl);
+  const result = parseNative(
+    native.parseHtmlDocument,
+    markup,
+    scriptingEnabled(documentImpl),
+    live,
+    Boolean(documentImpl._parseOptions.sourceCodeLocationInfo)
+  );
+  replayDocument(result, documentImpl, live);
 }
 
 // Decodes `bytes` as `encoding` (https://encoding.spec.whatwg.org/#decode) and parses the result into the document.
 // The addon does both in one call, so the markup never becomes a JS string. Returns null if the document was parsed
 // natively from the (non-empty) decoded text; otherwise returns the decoded text, which the caller must parse.
+// The one-call path covers documents parsed without live mode or source locations; the others are parsed from the text.
 function parseBytesIntoDocument(bytes, encoding, documentImpl) {
-  if (native === null || documentImpl._parseOptions.sourceCodeLocationInfo || customElementsDefined(documentImpl)) {
+  if (documentImpl._parseOptions.sourceCodeLocationInfo || customElementsDefined(documentImpl)) {
     return legacyHookDecode(bytes, encoding);
   }
 
@@ -530,16 +725,16 @@ function parseBytesIntoDocument(bytes, encoding, documentImpl) {
   if (typeof result === "string") {
     return result;
   }
-  replayDocument(result, documentImpl);
+  replayDocument(result, documentImpl, false);
   return null;
 }
 
-function replayDocument(result, documentImpl) {
+function replayDocument(result, documentImpl, live) {
   const names = decodeNames(result);
 
   // Mutation observers on the document would see one record per top-level node instead of one per parser insertion.
   const observers = documentImpl._registeredObserverList;
-  if (!canReplayFast(names) || (observers !== null && observers.length > 0)) {
+  if (live || !canReplayFast(names) || (observers !== null && observers.length > 0)) {
     replay(result, names, documentImpl, false);
     return;
   }
@@ -547,7 +742,7 @@ function replayDocument(result, documentImpl) {
   // Build the tree detached, in a temporary container, then insert each top-level node into the document with the
   // generic insert algorithm, which runs the connected insertion steps, document caches, and post-connection steps for
   // the whole subtree. Scripts popped off the stack while detached are prepared once connected, in parser order (they
-  // cannot run here: that case uses parse5 above).
+  // cannot run here: that case uses the live replay above).
   const container = DocumentFragment.createImpl(documentImpl._globalObject, [], { ownerDocument: documentImpl });
   const poppedScripts = [];
   replay(result, names, documentImpl, false, container, true, poppedScripts);

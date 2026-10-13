@@ -254,6 +254,9 @@ pub trait TreeSink {
     /// Called whenever the line number changes.
     fn set_current_line(&self, _line_number: u64) {}
 
+    /// jsdom: source location information (see `SourceLocationEvent`), when the tokenizer reports locations.
+    fn source_location(&self, _event: crate::interface::SourceLocationEvent<'_, Self::Handle>) {}
+
     fn allow_declarative_shadow_roots(&self, _intended_parent: &Self::Handle) -> bool {
         true
     }

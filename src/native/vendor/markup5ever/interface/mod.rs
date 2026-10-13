@@ -16,6 +16,9 @@ use web_atoms::{LocalName, Namespace, Prefix};
 pub use self::tree_builder::{create_element, AppendNode, AppendText, ElementFlags, NodeOrText};
 pub use self::tree_builder::{ElemName, Tracer, TreeSink};
 pub use self::tree_builder::{LimitedQuirks, NoQuirks, Quirks, QuirksMode};
+pub use self::source_location::{
+    SourceLocationEvent, SourcePoint, SourceTokenKind, SourceTokenLocation,
+};
 
 /// An [expanded name], containing the tag and the namespace.
 ///
@@ -117,6 +120,7 @@ macro_rules! expanded_name {
     };
 }
 
+pub mod source_location;
 pub mod tree_builder;
 
 /// A fully qualified name (with a namespace), used to depict names of tags and attributes.

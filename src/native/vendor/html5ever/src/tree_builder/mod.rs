@@ -12,6 +12,7 @@
 pub use crate::interface::{create_element, ElemName, ElementFlags, Tracer, TreeSink};
 pub use crate::interface::{AppendNode, AppendText, Attribute, NodeOrText};
 pub use crate::interface::{LimitedQuirks, NoQuirks, Quirks, QuirksMode};
+use crate::interface::{SourceLocationEvent, SourceTokenLocation};
 
 use self::types::*;
 
@@ -474,14 +475,17 @@ where
         if line_number != self.current_line.get() {
             self.sink.set_current_line(line_number);
         }
+        // jsdom patch: a parse error is not a token, so it does not end the chance to ignore a line feed (with source
+        // locations, the tokenizer reports errors before the character token it is still grouping).
+        if let tokenizer::ParseError(e) = token {
+            self.sink.parse_error(e);
+            return tokenizer::TokenSinkResult::Continue;
+        }
         let ignore_lf = self.ignore_lf.take();
 
-        // Handle `ParseError` and `DoctypeToken`; convert everything else to the local `Token` type.
+        // Handle `DoctypeToken`; convert everything else to the local `Token` type.
         let token = match token {
-            tokenizer::ParseError(e) => {
-                self.sink.parse_error(e);
-                return tokenizer::TokenSinkResult::Continue;
-            },
+            tokenizer::ParseError(_) => unreachable!(),
 
             tokenizer::DoctypeToken(dt) => {
                 if self.mode.get() == InsertionMode::Initial {
@@ -511,6 +515,13 @@ where
                     self.mode.set(InsertionMode::BeforeHtml);
                     return tokenizer::TokenSinkResult::Continue;
                 } else {
+                    // jsdom patch: in the "in table text" insertion mode, a DOCTYPE token is "anything else": the
+                    // pending table character tokens are inserted, and it is reprocessed in the original insertion
+                    // mode (which ignores it).
+                    if self.mode.get() == InsertionMode::InTableText {
+                        self.flush_pending_table_text();
+                        self.mode.set(self.orig_mode.take().unwrap());
+                    }
                     self.sink.parse_error(if self.opts.exact_errors {
                         Cow::from(format!("DOCTYPE in insertion mode {:?}", self.mode.get()))
                     } else {
@@ -537,6 +548,14 @@ where
         };
 
         self.process_to_completion(token)
+    }
+
+    fn source_location(&self, location: &SourceTokenLocation) {
+        self.sink.source_location(SourceLocationEvent::Token(location));
+    }
+
+    fn source_extra_line(&self, at: crate::interface::SourcePoint) {
+        self.sink.source_location(SourceLocationEvent::ExtraLine(at));
     }
 
     fn end(&self) {
@@ -671,6 +690,7 @@ where
     }
 
     fn stop_parsing(&self) -> ProcessResult<Handle> {
+        self.sink.source_location(SourceLocationEvent::StopParsing);
         ProcessResult::Done
     }
 
@@ -836,6 +856,7 @@ where
                 };
                 // FIXME: Is there a way to avoid cloning the attributes twice here (once on their
                 // own, once as part of t.clone() above)?
+                self.sink.source_location(SourceLocationEvent::CreateRecreated(&node));
                 let new_element = create_element(
                     &self.sink,
                     QualName::new(None, ns!(html), tag.name.clone()),
@@ -869,6 +890,7 @@ where
             // 15.
             // FIXME: Is there a way to avoid cloning the attributes twice here (once on their own,
             // once as part of t.clone() above)?
+            self.sink.source_location(SourceLocationEvent::CreateRecreated(&fmt_elem));
             let new_element = create_element(
                 &self.sink,
                 QualName::new(None, ns!(html), fmt_elem_tag.name.clone()),
@@ -1026,8 +1048,8 @@ where
         loop {
             // Step 8. Create: Insert an HTML element for the token for which the element entry was created,
             // to obtain new element.
-            let tag = match self.active_formatting.borrow()[entry_index] {
-                FormatEntry::Element(_, ref t) => t.clone(),
+            let (entry, tag) = match self.active_formatting.borrow()[entry_index] {
+                FormatEntry::Element(ref h, ref t) => (h.clone(), t.clone()),
                 FormatEntry::Marker => {
                     panic!("Found marker during formatting element reconstruction")
                 },
@@ -1035,6 +1057,7 @@ where
 
             // FIXME: Is there a way to avoid cloning the attributes twice here (once on their own,
             // once as part of t.clone() above)?
+            self.sink.source_location(SourceLocationEvent::CreateReopened(&entry));
             let new_element = self.insert_element(
                 PushFlag::Push,
                 ns!(html),
@@ -1457,6 +1480,7 @@ where
     }
 
     fn insert_phantom(&self, name: LocalName) -> Handle {
+        self.sink.source_location(SourceLocationEvent::CreateImplied);
         self.insert_element(PushFlag::Push, ns!(html), name, vec![])
     }
 
@@ -1873,9 +1897,13 @@ where
 
     fn unexpected_start_tag_in_foreign_content(&self, tag: Tag) -> ProcessResult<Handle> {
         self.unexpected(&tag);
-        while !self.current_node_in(|n| {
+        // jsdom patch: an annotation-xml element that is an HTML integration point stops the popping too.
+        while !(self.current_node_in(|n| {
             *n.ns == ns!(html) || mathml_text_integration_point(n) || svg_html_integration_point(n)
-        }) {
+        }) || self
+            .sink
+            .is_mathml_annotation_xml_integration_point(&self.current_node()))
+        {
             self.pop();
         }
         self.step(self.mode.get(), Token::Tag(tag))

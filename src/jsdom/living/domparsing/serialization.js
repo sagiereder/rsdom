@@ -9,9 +9,8 @@ const NODE_TYPE = require("../node-type");
 const { HTML_NS } = require("../helpers/namespaces");
 
 // A direct port of parse5's serializer (parse5/dist/serializer/index.js) together with the jsdom tree adapter that
-// used to feed it (./parse5-adapter-serialization.js). It walks the impl tree's links instead of going through the
-// adapter, which allocated an array per element for its children and its attributes. Its output must stay
-// byte-for-byte identical to parse5's.
+// used to feed it. It walks the impl tree's links instead of going through the adapter, which allocated an array per
+// element for its children and its attributes. Its output must stay byte-for-byte identical to parse5's.
 
 const VOID_ELEMENTS = new Set([
   "area", "base", "basefont", "bgsound", "br", "col", "embed", "frame", "hr", "img", "input", "keygen", "link", "meta",

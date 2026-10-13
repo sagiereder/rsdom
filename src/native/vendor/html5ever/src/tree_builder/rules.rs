@@ -9,7 +9,7 @@
 
 // The tree builder rules, as a single, enormous nested match expression.
 
-use crate::interface::Quirks;
+use crate::interface::{Quirks, SourceLocationEvent};
 use crate::tokenizer::states::{Rawtext, Rcdata, ScriptData};
 use crate::tokenizer::TagKind::{EndTag, StartTag};
 use crate::tree_builder::tag_sets::*;
@@ -116,6 +116,7 @@ where
             // https://html.spec.whatwg.org/multipage/parsing.html#the-before-html-insertion-mode
             InsertionMode::BeforeHtml => {
                 let anything_else = |token: Token| {
+                    self.sink.source_location(SourceLocationEvent::CreateImplied);
                     self.create_root(vec![]);
                     ProcessResult::Reprocess(InsertionMode::BeforeHead, token)
                 };
@@ -461,6 +462,9 @@ where
                     if self.in_scope_named(default_scope, local_name!("body")) {
                         self.check_body_end();
                         self.mode.set(InsertionMode::AfterBody);
+                        let body = self.body_elem().map(|b| b.clone());
+                        self.sink
+                            .source_location(SourceLocationEvent::CloseBody(body.as_ref()));
                     } else {
                         self.sink
                             .parse_error(Borrowed("</body> with no <body> in scope"));
@@ -1015,7 +1019,10 @@ where
                     if !self.in_html_elem_named(local_name!("template"))
                         && self.form_elem.borrow().is_none()
                     {
-                        *self.form_elem.borrow_mut() = Some(self.insert_and_pop_element_for(tag));
+                        let form = self.insert_and_pop_element_for(tag);
+                        self.sink
+                            .source_location(SourceLocationEvent::PushedAndPopped(&form));
+                        *self.form_elem.borrow_mut() = Some(form);
                     }
                     ProcessResult::Done
                 },
@@ -1035,31 +1042,13 @@ where
 
                 Token::Characters(split, text) => {
                     self.pending_table_text.borrow_mut().push((split, text));
+                    self.sink.source_location(SourceLocationEvent::TableTextPushed);
                     ProcessResult::Done
                 },
 
                 token => {
-                    let pending = self.pending_table_text.take();
-                    let contains_nonspace = pending.iter().any(|&(split, ref text)| match split {
-                        SplitStatus::Whitespace => false,
-                        SplitStatus::NotWhitespace => true,
-                        SplitStatus::NotSplit => any_not_whitespace(text),
-                    });
-
-                    if contains_nonspace {
-                        self.sink.parse_error(Borrowed("Non-space table text"));
-                        for (split, text) in pending.into_iter() {
-                            match self.foster_parent_in_body(Token::Characters(split, text)) {
-                                ProcessResult::Done => (),
-                                _ => panic!("not prepared to handle this!"),
-                            }
-                        }
-                    } else {
-                        for (_, text) in pending.into_iter() {
-                            self.append_text(text);
-                        }
-                    }
-
+                    // jsdom: moved to `flush_pending_table_text`, which DOCTYPE tokens use too.
+                    self.flush_pending_table_text();
                     ProcessResult::Reprocess(self.orig_mode.take().unwrap(), token)
                 },
             },
@@ -1328,8 +1317,9 @@ where
                     if self.current_node_named(local_name!("optgroup")) {
                         self.pop();
                     }
-                    self.insert_element_for(tag);
-                    self.pop();
+                    // jsdom patch: inserted without being pushed and popped, as in parse5 (where it then keeps the
+                    // end of its start tag as its end location).
+                    self.insert_and_pop_element_for(tag);
                     ProcessResult::DoneAckSelfClosing
                 },
 
@@ -1502,6 +1492,7 @@ where
                     } else {
                         self.mode.set(InsertionMode::AfterAfterBody);
                     }
+                    self.sink.source_location(SourceLocationEvent::CloseHtml);
                     ProcessResult::Done
                 },
 
@@ -1693,6 +1684,12 @@ where
                     }
 
                     if eq {
+                        {
+                            let open_elems = self.open_elems.borrow();
+                            self.sink.source_location(
+                                SourceLocationEvent::ForeignEndTagMatched(&open_elems[stack_idx]),
+                            );
+                        }
                         self.truncate_stack(stack_idx);
                         return ProcessResult::Done;
                     }
@@ -1708,5 +1705,35 @@ where
             // FIXME: Why is this unreachable?
             Token::Eof => panic!("impossible case in foreign content"),
         }
+    }
+
+    /// jsdom: the "anything else" steps of the "in table text" insertion mode, up to the reprocessing of the token
+    /// (moved out of `step`, for DOCTYPE tokens).
+    pub(crate) fn flush_pending_table_text(&self) {
+        let pending = self.pending_table_text.take();
+        let contains_nonspace = pending.iter().any(|&(split, ref text)| match split {
+            SplitStatus::Whitespace => false,
+            SplitStatus::NotWhitespace => true,
+            SplitStatus::NotSplit => any_not_whitespace(text),
+        });
+
+        if contains_nonspace {
+            self.sink.parse_error(Borrowed("Non-space table text"));
+            for (i, (split, text)) in pending.into_iter().enumerate() {
+                self.sink
+                    .source_location(SourceLocationEvent::TableTextFlushEntry(i));
+                match self.foster_parent_in_body(Token::Characters(split, text)) {
+                    ProcessResult::Done => (),
+                    _ => panic!("not prepared to handle this!"),
+                }
+            }
+        } else {
+            for (i, (_, text)) in pending.into_iter().enumerate() {
+                self.sink
+                    .source_location(SourceLocationEvent::TableTextFlushEntry(i));
+                self.append_text(text);
+            }
+        }
+        self.sink.source_location(SourceLocationEvent::TableTextFlushDone);
     }
 }

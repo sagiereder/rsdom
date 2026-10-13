@@ -290,9 +290,6 @@ function replay(ops, names, markup, extra, root, fast, parseDocType, poppedScrip
 
 // Returns false if the native parser declined the input; the caller then parses it with saxes.
 function parseIntoDocument(markup, documentImpl, parseDocType) {
-  if (native === null) {
-    return false;
-  }
   const result = parseNative(markup, undefined);
   if (result === null) {
     return false;
@@ -340,9 +337,6 @@ function parseIntoDocument(markup, documentImpl, parseDocType) {
 
 // Parses into the new, empty `fragment`. Returns false if the native parser declined the input.
 function parseFragment(markup, fragment, resolvePrefix, parseDocType) {
-  if (native === null) {
-    return false;
-  }
   // Custom element constructors run while the fragment is built could change what resolvePrefix() returns, which the
   // native parser calls before any element is created.
   if (hasCustomElementDefinitions(fragment._ownerDocument)) {

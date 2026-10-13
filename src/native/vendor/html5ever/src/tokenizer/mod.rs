@@ -34,6 +34,7 @@ pub use crate::buffer_queue::{BufferQueue, FromSet, NotFromSet, SetResult};
 use crate::macros::{time, unwrap_or_return};
 use crate::tendril::StrTendril;
 use crate::{Attribute, LocalName, QualName, SmallCharSet};
+use markup5ever::interface::{SourcePoint, SourceTokenKind, SourceTokenLocation};
 
 mod char_ref;
 mod interface;
@@ -77,6 +78,12 @@ pub struct TokenizerOpts {
     /// FIXME: Can't use Tendril because we want TokenizerOpts
     /// to be Send.
     pub last_start_tag_name: Option<String>,
+
+    /// jsdom: report the source location of each token to the sink (`TokenSink::source_location`), as parse5's
+    /// `sourceCodeLocationInfo` option does. Character tokens are then also grouped the way parse5 groups them (into
+    /// runs of whitespace, of NULLs, and of other characters), with one token per group. The whole input must be fed
+    /// before `end()` is called. Default: false
+    pub source_locations: bool,
 }
 
 impl Default for TokenizerOpts {
@@ -87,6 +94,7 @@ impl Default for TokenizerOpts {
             profile: false,
             initial_state: None,
             last_start_tag_name: None,
+            source_locations: false,
         }
     }
 }
@@ -162,6 +170,47 @@ pub struct Tokenizer<Sink> {
 
     /// Track current line
     current_line: Cell<u64>,
+
+    /// jsdom: source location tracking (`TokenizerOpts::source_locations`). See `Tokenizer::loc_point`.
+    loc: Option<Box<LocState>>,
+}
+
+/// jsdom: the state of source location tracking. Positions are counted in bytes of input consumed: the input queue
+/// being tokenized is `loc_input`, and everything fed so far but no longer in it has been consumed.
+struct LocState {
+    /// The queue being tokenized (only dereferenced while `run` or `end` is borrowing it).
+    input: Cell<*const BufferQueue>,
+    /// The number of bytes fed in total.
+    total: Cell<usize>,
+    /// The length of the queue when the last `feed` returned.
+    last_len: Cell<usize>,
+    /// Set once the end of the input has been reached: positions are then the end of the input.
+    at_eof: Cell<bool>,
+    /// When set, the position at which characters are emitted (for characters that parse5 emits earlier).
+    emit_at: Cell<Option<usize>>,
+    /// The start of the current tag, comment or doctype token.
+    token_start: Cell<SourcePoint>,
+    /// The start and end of the current attribute.
+    attr_start: Cell<SourcePoint>,
+    attr_end: Cell<SourcePoint>,
+    /// The attributes of the current tag that are kept.
+    attrs: RefCell<Vec<(LocalName, SourcePoint, SourcePoint)>>,
+    /// The end of the last tag, comment or doctype token (where a character token that follows starts).
+    after_token: Cell<SourcePoint>,
+    /// The pending character token: its characters, kind (see `char_kind`; 0 when there is none) and start.
+    chars: RefCell<StrTendril>,
+    chars_kind: Cell<u8>,
+    chars_start: Cell<SourcePoint>,
+}
+
+/// jsdom: parse5's character token types: whitespace (1), NULL (2) and other characters (3). Unlike in parse5, a
+/// carriage return (which only a character reference produces) is whitespace, as it is to tree construction.
+fn char_kind(c: char) -> u8 {
+    match c {
+        '\t' | '\n' | '\x0C' | '\r' | ' ' => 1,
+        '\0' => 2,
+        _ => 3,
+    }
 }
 
 impl<Sink: TokenSink> Tokenizer<Sink> {
@@ -173,12 +222,34 @@ impl<Sink: TokenSink> Tokenizer<Sink> {
             .map(|s| LocalName::from(&*s));
         let state = opts.initial_state.unwrap_or(states::Data);
         let discard_bom = opts.discard_bom;
+        let loc = opts.source_locations.then(|| {
+            Box::new(LocState {
+                input: Cell::new(std::ptr::null()),
+                total: Cell::new(0),
+                last_len: Cell::new(0),
+                at_eof: Cell::new(false),
+                emit_at: Cell::new(None),
+                token_start: Cell::new(SourcePoint::default()),
+                attr_start: Cell::new(SourcePoint::default()),
+                attr_end: Cell::new(SourcePoint::default()),
+                attrs: RefCell::new(vec![]),
+                // parse5's initial location is "after" the character before the input.
+                after_token: Cell::new(SourcePoint {
+                    consumed: 0,
+                    back: -1,
+                }),
+                chars: RefCell::new(StrTendril::new()),
+                chars_kind: Cell::new(0),
+                chars_start: Cell::new(SourcePoint::default()),
+            })
+        });
         Tokenizer {
             opts,
             sink,
             state: Cell::new(state),
             char_ref_tokenizer: RefCell::new(None),
-            at_eof: Cell::new(false),
+            // With source locations, all input is fed before `end()`: running out of it is the end of the input.
+            at_eof: Cell::new(loc.is_some()),
             current_char: Cell::new('\0'),
             reconsume: Cell::new(false),
             ignore_lf: Cell::new(false),
@@ -196,6 +267,7 @@ impl<Sink: TokenSink> Tokenizer<Sink> {
             state_profile: RefCell::new(BTreeMap::new()),
             time_in_sink: Cell::new(0),
             current_line: Cell::new(1),
+            loc,
         }
     }
 
@@ -215,7 +287,124 @@ impl<Sink: TokenSink> Tokenizer<Sink> {
             }
         };
 
-        self.run(input)
+        match self.loc {
+            None => self.run(input),
+            Some(ref loc) => {
+                loc.total
+                    .set(loc.total.get() - loc.last_len.get() + input.len_bytes());
+                let result = self.run(input);
+                loc.last_len.set(input.len_bytes());
+                result
+            },
+        }
+    }
+
+    /// jsdom: the number of bytes of input consumed (see `SourcePoint`).
+    fn loc_consumed(&self, loc: &LocState) -> usize {
+        if loc.at_eof.get() {
+            return loc.total.get() + 1;
+        }
+        // SAFETY: `input` is set by `run` and `end` to the queue they borrow, and positions are only taken while they
+        // run.
+        loc.total.get() - unsafe { &*loc.input.get() }.len_bytes()
+    }
+
+    /// jsdom: the position `back` characters before the current input character.
+    fn loc_point(&self, back: i32) -> SourcePoint {
+        match self.loc {
+            Some(ref loc) => SourcePoint {
+                consumed: self.loc_consumed(loc),
+                back,
+            },
+            None => SourcePoint::default(),
+        }
+    }
+
+    /// jsdom: records the start of a tag, comment or doctype token, `back` characters before the current one.
+    fn loc_token_start(&self, back: i32) {
+        if let Some(ref loc) = self.loc {
+            loc.token_start.set(self.loc_point(back));
+        }
+    }
+
+    /// jsdom: records the end of the current attribute (at the current input character).
+    fn loc_attr_end(&self) {
+        if let Some(ref loc) = self.loc {
+            loc.attr_end.set(self.loc_point(0));
+        }
+    }
+
+    /// jsdom: emits the pending character token, ending at `end`.
+    fn loc_flush_chars(&self, loc: &LocState, end: SourcePoint) {
+        let kind = loc.chars_kind.replace(0);
+        if kind == 0 {
+            return;
+        }
+        let chars = mem::take(&mut *loc.chars.borrow_mut());
+        self.sink.source_location(&SourceTokenLocation {
+            kind: SourceTokenKind::Characters,
+            start: loc.chars_start.get(),
+            end,
+            attrs: vec![],
+        });
+        // parse5 merges a run of NULLs into one token.
+        self.process_token_and_continue(if kind == 2 {
+            NullCharacterToken
+        } else {
+            CharacterTokens(chars)
+        });
+    }
+
+    /// jsdom: appends characters of one kind to the pending character token; `at` is the position of the first one.
+    fn loc_push_chars(&self, loc: &LocState, kind: u8, chars: &str, at: usize) {
+        let current = loc.chars_kind.get();
+        if current != kind {
+            if current == 0 {
+                loc.chars_start.set(loc.after_token.get());
+            } else {
+                let point = SourcePoint {
+                    consumed: at,
+                    back: 0,
+                };
+                self.loc_flush_chars(loc, point);
+                loc.chars_start.set(point);
+            }
+            loc.chars_kind.set(kind);
+        }
+        loc.chars.borrow_mut().push_slice(chars);
+    }
+
+    /// jsdom: emits characters all at the current input character (or at `emit_at`).
+    fn loc_emit_chars_here(&self, loc: &LocState, chars: &str) {
+        let at = loc
+            .emit_at
+            .get()
+            .unwrap_or_else(|| self.loc_consumed(loc));
+        let mut start = 0;
+        while start < chars.len() {
+            let kind = char_kind(chars[start..].chars().next().unwrap());
+            let len = chars[start..]
+                .find(|c| char_kind(c) != kind)
+                .unwrap_or(chars.len() - start);
+            self.loc_push_chars(loc, kind, &chars[start..start + len], at);
+            start += len;
+        }
+    }
+
+    /// jsdom: reports the location of a tag, comment or doctype token about to be processed.
+    fn loc_token(&self, kind: SourceTokenKind) {
+        if let Some(ref loc) = self.loc {
+            let start = loc.token_start.get();
+            self.loc_flush_chars(loc, start);
+            let end = self.loc_point(-1);
+            loc.after_token.set(end);
+            self.sink.source_location(&SourceTokenLocation {
+                kind,
+                start,
+                end,
+                attrs: mem::take(&mut *loc.attrs.borrow_mut()),
+            });
+        }
     }
 
     pub fn set_plaintext_state(&self) {
@@ -389,6 +578,9 @@ impl<Sink: TokenSink> Tokenizer<Sink> {
 
     /// Run the state machine for as long as we can.
     fn run(&self, input: &BufferQueue) -> TokenizerResult<Sink::Handle> {
+        if let Some(ref loc) = self.loc {
+            loc.input.set(input);
+        }
         if self.opts.profile {
             loop {
                 let state = self.state.get();
@@ -457,6 +649,11 @@ impl<Sink: TokenSink> Tokenizer<Sink> {
         #[cfg(feature = "trace_tokenizer")]
         trace!("  emit");
 
+        if let Some(ref loc) = self.loc {
+            let mut buf = [0; 4];
+            self.loc_emit_chars_here(loc, c.encode_utf8(&mut buf));
+            return;
+        }
         self.process_token_and_continue(match c {
             '\0' => NullCharacterToken,
             _ => CharacterTokens(StrTendril::from_char(c)),
@@ -464,7 +661,23 @@ impl<Sink: TokenSink> Tokenizer<Sink> {
     }
 
     // The string must not contain '\0'!
+    // jsdom: the string must be the characters just consumed from the input (a run returned by pop_except_from).
     fn emit_chars(&self, b: StrTendril) {
+        if let Some(ref loc) = self.loc {
+            // Each character's position is that of the character itself.
+            let first = self.loc_consumed(loc) - b.len();
+            let mut start = 0;
+            while start < b.len() {
+                let kind = char_kind(b[start..].chars().next().unwrap());
+                let len = b[start..]
+                    .find(|c| char_kind(c) != kind)
+                    .unwrap_or(b.len() - start);
+                let at = first + start + b[start..].chars().next().unwrap().len_utf8();
+                self.loc_push_chars(loc, kind, &b[start..start + len], at);
+                start += len;
+            }
+            return;
+        }
         self.process_token_and_continue(CharacterTokens(b));
     }
 
@@ -486,6 +699,13 @@ impl<Sink: TokenSink> Tokenizer<Sink> {
                     self.emit_error(Borrowed("Self-closing end tag"));
                 }
             },
+        }
+
+        if self.loc.is_some() {
+            self.loc_token(match self.current_tag_kind.get() {
+                StartTag => SourceTokenKind::StartTag(name.clone()),
+                EndTag => SourceTokenKind::EndTag(name.clone()),
+            });
         }
 
         let token = TagToken(Tag {
@@ -518,6 +738,10 @@ impl<Sink: TokenSink> Tokenizer<Sink> {
 
         // FIXME: Make sure that clearing on emit is spec-compatible.
         let buf = mem::take(&mut *self.temp_buf.borrow_mut());
+        if let Some(ref loc) = self.loc {
+            self.loc_emit_chars_here(loc, &buf);
+            return;
+        }
         self.emit_chars(buf);
     }
 
@@ -527,6 +751,7 @@ impl<Sink: TokenSink> Tokenizer<Sink> {
     }
 
     fn emit_current_comment(&self) {
+        self.loc_token(SourceTokenKind::Comment);
         let comment = mem::take(&mut *self.current_comment.borrow_mut());
         self.process_token_and_continue(CommentToken(comment));
     }
@@ -538,6 +763,8 @@ impl<Sink: TokenSink> Tokenizer<Sink> {
     }
 
     fn create_tag(&self, kind: TagKind, c: char) {
+        // jsdom: the tag starts at its '<' (the current character is the first of its name).
+        self.loc_token_start(if kind == StartTag { 1 } else { 2 });
         self.discard_tag();
         self.current_tag_name.borrow_mut().push_char(c);
         self.current_tag_kind.set(kind);
@@ -555,6 +782,9 @@ impl<Sink: TokenSink> Tokenizer<Sink> {
 
     fn create_attribute(&self, c: char) {
         self.finish_attribute();
+        if let Some(ref loc) = self.loc {
+            loc.attr_start.set(self.loc_point(0));
+        }
 
         self.current_attr_name.borrow_mut().push_char(c);
     }
@@ -580,6 +810,13 @@ impl<Sink: TokenSink> Tokenizer<Sink> {
             self.current_attr_value.borrow_mut().clear();
         } else {
             let name = LocalName::from(&**self.current_attr_name.borrow());
+            if let Some(ref loc) = self.loc {
+                loc.attrs.borrow_mut().push((
+                    name.clone(),
+                    loc.attr_start.get(),
+                    loc.attr_end.get(),
+                ));
+            }
             self.current_attr_name.borrow_mut().clear();
             self.current_tag_attrs.borrow_mut().push(Attribute {
                 // The tree builder will adjust the namespace if necessary.
@@ -591,6 +828,7 @@ impl<Sink: TokenSink> Tokenizer<Sink> {
     }
 
     fn emit_current_doctype(&self) {
+        self.loc_token(SourceTokenKind::Doctype);
         let doctype = self.current_doctype.take();
         self.process_token_and_continue(DoctypeToken(doctype));
     }
@@ -619,9 +857,27 @@ impl<Sink: TokenSink> Tokenizer<Sink> {
 
         let is_in_attribute = matches!(self.state.get(), states::AttributeValue(_));
         *self.char_ref_tokenizer.borrow_mut() = Some(CharRefTokenizer::new(is_in_attribute));
+
+        // jsdom: see `SourceLocationEvent::ExtraLine`.
+        if let Some(ref loc) = self.loc {
+            // SAFETY: as in `loc_consumed`.
+            if let Some('\n' | '\r') = unsafe { &*loc.input.get() }.peek() {
+                self.sink.source_extra_line(self.loc_point(-1));
+            }
+        }
     }
 
     fn emit_eof(&self) {
+        if let Some(ref loc) = self.loc {
+            let point = self.loc_point(0);
+            self.loc_flush_chars(loc, point);
+            self.sink.source_location(&SourceTokenLocation {
+                kind: SourceTokenKind::Eof,
+                start: point,
+                end: point,
+                attrs: vec![],
+            });
+        }
         self.process_token_and_continue(EOFToken);
     }
 
@@ -643,6 +899,21 @@ impl<Sink: TokenSink> Tokenizer<Sink> {
             self.reconsume.set(false);
         } else {
             input.next();
+        }
+    }
+
+    /// jsdom: makes characters be emitted at the first character of the current (raw text) end tag's name, where
+    /// parse5 emits the "</" and the name of an end tag that turns out not to be one.
+    fn loc_emit_at_tag_name(&self) {
+        if let Some(ref loc) = self.loc {
+            loc.emit_at.set(Some(loc.token_start.get().consumed));
+        }
+    }
+
+    /// jsdom: makes characters be emitted at the current input character again.
+    fn loc_emit_here(&self) {
+        if let Some(ref loc) = self.loc {
+            loc.emit_at.set(None);
         }
     }
 
@@ -765,7 +1036,8 @@ impl<Sink: TokenSink> Tokenizer<Sink> {
                 #[cfg(any(target_arch = "x86", target_arch = "x86_64", target_arch = "aarch64"))]
                 let set_result = if !(self.opts.exact_errors
                     || self.reconsume.get()
-                    || self.ignore_lf.get())
+                    || self.ignore_lf.get()
+                    || self.loc.is_some())
                     && Self::is_supported_simd_feature_detected()
                 {
                     let front_buffer = input.peek_front_chunk_mut();
@@ -812,8 +1084,9 @@ impl<Sink: TokenSink> Tokenizer<Sink> {
                 match set_result {
                     FromSet('\0') => {
                         self.bad_char_error();
-                        // jsdom patch: parse5 merges a run of NULLs into a single null-character token.
-                        while input.peek() == Some('\0') {
+                        // jsdom patch: parse5 merges a run of NULLs into a single null-character token. (With
+                        // source locations, the character tokens are grouped as in parse5 anyway.)
+                        while self.loc.is_none() && input.peek() == Some('\0') {
                             input.next();
                             self.bad_char_error();
                         }
@@ -924,6 +1197,7 @@ impl<Sink: TokenSink> Tokenizer<Sink> {
                     '/' => go!(self: to EndTagOpen),
                     '?' => {
                         self.bad_char_error();
+                        self.loc_token_start(1);
                         go!(self: clear_comment; reconsume BogusComment)
                     },
                     c => match lower_ascii_letter(c) {
@@ -948,6 +1222,7 @@ impl<Sink: TokenSink> Tokenizer<Sink> {
                         Some(cl) => go!(self: create_tag EndTag cl; to TagName),
                         None => {
                             self.bad_char_error();
+                            self.loc_token_start(2);
                             go!(self: clear_comment; reconsume BogusComment)
                         },
                     },
@@ -1048,9 +1323,11 @@ impl<Sink: TokenSink> Tokenizer<Sink> {
                     Some(cl) => go!(self: push_tag cl; push_temp c),
                     None => {
                         go!(self: discard_tag);
+                        self.loc_emit_at_tag_name();
                         self.emit_char('<');
                         self.emit_char('/');
                         self.emit_temp_buf();
+                        self.loc_emit_here();
                         go!(self: reconsume RawData kind);
                     },
                 }
@@ -1205,7 +1482,11 @@ impl<Sink: TokenSink> Tokenizer<Sink> {
                 if self.consume_name_run(input, true) {
                     continue;
                 }
-                match get_char!(self, input) {
+                let c = get_char!(self, input);
+                if matches!(c, '\t' | '\n' | '\x0C' | ' ' | '/' | '=' | '>') {
+                    self.loc_attr_end();
+                }
+                match c {
                     '\t' | '\n' | '\x0C' | ' ' => go!(self: to AfterAttributeName),
                     '/' => go!(self: to SelfClosingStartTag),
                     '=' => go!(self: to BeforeAttributeValue),
@@ -1303,10 +1584,14 @@ impl<Sink: TokenSink> Tokenizer<Sink> {
                     small_char_set!('\r' '\t' '\n' '\x0C' ' ' '&' '>' '\0')
                 ) {
                     FromSet('\t') | FromSet('\n') | FromSet('\x0C') | FromSet(' ') => {
+                        self.loc_attr_end();
                         go!(self: to BeforeAttributeName)
                     },
                     FromSet('&') => go!(self: consume_char_ref),
-                    FromSet('>') => go!(self: emit_tag Data),
+                    FromSet('>') => {
+                        self.loc_attr_end();
+                        go!(self: emit_tag Data)
+                    },
                     FromSet('\0') => {
                         self.bad_char_error();
                         go!(self: push_value '\u{fffd}')
@@ -1323,7 +1608,11 @@ impl<Sink: TokenSink> Tokenizer<Sink> {
 
             //§ after-attribute-value-(quoted)-state
             states::AfterAttributeValueQuoted => loop {
-                match get_char!(self, input) {
+                let c = get_char!(self, input);
+                if matches!(c, '\t' | '\n' | '\x0C' | ' ' | '/' | '>') {
+                    self.loc_attr_end();
+                }
+                match c {
                     '\t' | '\n' | '\x0C' | ' ' => go!(self: to BeforeAttributeName),
                     '/' => go!(self: to SelfClosingStartTag),
                     '>' => go!(self: emit_tag Data),
@@ -1677,8 +1966,10 @@ impl<Sink: TokenSink> Tokenizer<Sink> {
             //§ markup-declaration-open-state
             states::MarkupDeclarationOpen => loop {
                 if eat_exact!(self, input, "--") {
+                    self.loc_token_start(3);
                     go!(self: clear_comment; to CommentStart);
                 } else if eat!(self, input, "doctype") {
+                    self.loc_token_start(8);
                     go!(self: to Doctype);
                 } else {
                     if self
@@ -1689,6 +1980,8 @@ impl<Sink: TokenSink> Tokenizer<Sink> {
                         go!(self: clear_temp; to CdataSection);
                     }
                     self.bad_char_error();
+                    // The current character is the '!'.
+                    self.loc_token_start(1);
                     go!(self: clear_comment; to BogusComment);
                 }
             },
@@ -1773,6 +2066,10 @@ impl<Sink: TokenSink> Tokenizer<Sink> {
         // Handle EOF in the char ref sub-tokenizer, if there is one.
         // Do this first because it might un-consume stuff.
         let input = BufferQueue::default();
+        if let Some(ref loc) = self.loc {
+            // Everything fed was consumed: what the character reference tokenizer un-consumes goes into `input`.
+            loc.input.set(&input);
+        }
         match self.char_ref_tokenizer.take() {
             None => (),
             Some(mut tokenizer) => {
@@ -1786,6 +2083,9 @@ impl<Sink: TokenSink> Tokenizer<Sink> {
         assert!(matches!(self.run(&input), TokenizerResult::Done));
         assert!(input.is_empty());
 
+        if let Some(ref loc) = self.loc {
+            loc.at_eof.set(true);
+        }
         loop {
             match self.eof_step() {
                 ProcessResult::Continue => (),
@@ -1881,9 +2181,11 @@ impl<Sink: TokenSink> Tokenizer<Sink> {
             },
 
             states::RawEndTagName(kind) => {
+                self.loc_emit_at_tag_name();
                 self.emit_char('<');
                 self.emit_char('/');
                 self.emit_temp_buf();
+                self.loc_emit_here();
                 go!(self: to RawData kind)
             },
 
@@ -1936,6 +2238,8 @@ impl<Sink: TokenSink> Tokenizer<Sink> {
 
             states::MarkupDeclarationOpen => {
                 self.bad_char_error();
+                // At the end of the input, which comes after the "<!".
+                self.loc_token_start(2);
                 go!(self: to BogusComment)
             },
 
@@ -2313,6 +2617,7 @@ mod test {
             profile: false,
             initial_state: None,
             last_start_tag_name: None,
+            source_locations: false,
         };
         let vector = vec![
             StrTendril::from("<a>\n"),
@@ -2338,6 +2643,7 @@ mod test {
             profile: false,
             initial_state: None,
             last_start_tag_name: None,
+            source_locations: false,
         };
         let vector = vec![
             StrTendril::from("<a>\r\n"),

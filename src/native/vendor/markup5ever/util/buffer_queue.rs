@@ -64,6 +64,11 @@ impl Default for BufferQueue {
 }
 
 impl BufferQueue {
+    /// jsdom: the total length in bytes of the buffered input.
+    pub fn len_bytes(&self) -> usize {
+        self.buffers.borrow().iter().map(|b| b.len()).sum()
+    }
+
     /// Returns whether the queue is empty.
     #[inline]
     pub fn is_empty(&self) -> bool {
