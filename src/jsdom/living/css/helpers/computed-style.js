@@ -1,7 +1,5 @@
 "use strict";
 
-const fs = require("node:fs");
-const path = require("node:path");
 const Specificity = require("@bramus/specificity").default;
 const CSSImportRule = require("../../../../generated/idl/CSSImportRule.js");
 const CSSMediaRule = require("../../../../generated/idl/CSSMediaRule.js");
@@ -9,7 +7,7 @@ const CSSStyleProperties = require("../../../../generated/idl/CSSStyleProperties
 const CSSStyleRule = require("../../../../generated/idl/CSSStyleRule.js");
 const { asciiLowercase } = require("../../helpers/strings.js");
 const { evaluateMediaList } = require("../MediaList-impl.js");
-const { parseStyleSheet } = require("./css-parser.js");
+const { getDefaultStyleSheet } = require("./default-stylesheet.js");
 const { isGlobalKeyword } = require("./css-values.js");
 const { absoluteFontSize } = require("./font-sizes.js");
 const { systemColors } = require("./system-colors.js");
@@ -17,12 +15,6 @@ const styleIndex = require("./style-index.js");
 
 const useStyleIndex = process.env.JSDOM_CSS_INDEX !== "0";
 const verifyStyleIndex = process.env.JSDOM_CSS_VERIFY === "1";
-
-const defaultStyleSheet = fs.readFileSync(
-  path.resolve(__dirname, "../../../browser/default-stylesheet.css"),
-  { encoding: "utf-8" }
-);
-let parsedDefaultStyleSheet;
 
 function getComputedStyleDeclaration(elementImpl) {
   const styleCache = elementImpl._ownerDocument._styleCache;
@@ -70,15 +62,10 @@ function prepareComputedStyleDeclaration(elementImpl, styleCache) {
 }
 
 function applyStyleSheetRules(elementImpl, declaration) {
-  if (!parsedDefaultStyleSheet) {
-    // The parsed default stylesheet will be composed of CSSOM objects from the first global object accessed. This is a
-    // bit strange, but since we only ever access the internals of `parsedDefaultStyleSheet`, and don't expose it to
-    // callers, it shouldn't cause any issues.
-    parsedDefaultStyleSheet = parseStyleSheet(defaultStyleSheet, elementImpl._globalObject);
-  }
+  const parsedDefaultStyleSheet = getDefaultStyleSheet(elementImpl._globalObject);
 
   if (canUseStyleIndex(elementImpl)) {
-    applyIndexedStyleSheetRules(elementImpl, declaration);
+    applyIndexedStyleSheetRules(elementImpl, declaration, parsedDefaultStyleSheet);
     return true;
   }
 
@@ -98,7 +85,7 @@ const CASCADE_CACHE_LIMIT = 4096;
 // Applying declarations to a computed declaration only depends on the sequence of (rule, specificity) pairs and the
 // inline style, not on the element. So the result is cached per distinct match list, which elements sharing the same
 // selectors (the common case) then reuse instead of re-parsing every declaration value.
-function applyIndexedStyleSheetRules(elementImpl, declaration) {
+function applyIndexedStyleSheetRules(elementImpl, declaration, parsedDefaultStyleSheet) {
   const document = elementImpl._ownerDocument;
   const sheets = [parsedDefaultStyleSheet, ...document.styleSheets._list];
   const index = styleIndex.getStyleIndex(document, sheets);
@@ -211,10 +198,8 @@ function isDisplayNone(elementImpl) {
 
 // Returns undefined when the cascaded value needs the full computation (CSS-wide keywords, var(), ...).
 function indexedDisplayIsNone(elementImpl, document) {
-  if (!parsedDefaultStyleSheet) {
-    parsedDefaultStyleSheet = parseStyleSheet(defaultStyleSheet, elementImpl._globalObject);
-  }
-  const index = styleIndex.getStyleIndex(document, [parsedDefaultStyleSheet, ...document.styleSheets._list]);
+  const sheets = [getDefaultStyleSheet(elementImpl._globalObject), ...document.styleSheets._list];
+  const index = styleIndex.getStyleIndex(document, sheets);
   if (index.displayUnsupported) {
     return undefined;
   }

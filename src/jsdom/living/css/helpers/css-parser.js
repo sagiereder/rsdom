@@ -959,13 +959,18 @@ const DECLARATION_BLOCK_CACHE_LIMIT = 4096;
 const declarationBlocksByNode = new WeakMap();
 const declarationBlocksByText = new Map();
 
+function declarationBlockKey(block) {
+  let key = "";
+  for (const child of block.children) {
+    key += `${child.property}\u0000${generateNode(child.value)}\u0000${child.important}\u0001`;
+  }
+  return key;
+}
+
 function populatePlainDeclarationBlock(block, style) {
   let snapshot = declarationBlocksByNode.get(block);
   if (snapshot === undefined) {
-    let key = "";
-    for (const child of block.children) {
-      key += `${child.property}\u0000${generateNode(child.value)}\u0000${child.important}\u0001`;
-    }
+    const key = declarationBlockKey(block);
     snapshot = declarationBlocksByText.get(key);
     if (snapshot === undefined) {
       populateDeclarations(block, style);
@@ -980,6 +985,45 @@ function populatePlainDeclarationBlock(block, style) {
     declarationBlocksByNode.set(block, snapshot);
   }
   style._restoreDeclarations(snapshot);
+}
+
+// Seeds the declaration block cache with precomputed snapshots, as returned by getDeclarationBlockSnapshots(): an
+// array of [key, values, priorities] entries, where values and priorities are arrays of map entries. Used for the
+// default stylesheet (see default-stylesheet.js), whose declarations are validated ahead of time.
+function seedDeclarationBlocks(entries) {
+  if (declarationBlocksByText.size + entries.length > DECLARATION_BLOCK_CACHE_LIMIT) {
+    return;
+  }
+  for (const [key, values, priorities] of entries) {
+    if (!declarationBlocksByText.has(key)) {
+      declarationBlocksByText.set(key, { values: new Map(values), priorities: new Map(priorities) });
+    }
+  }
+}
+
+// Returns the cached snapshots of the plain declaration blocks of the style rules of `cssText`, which must have just
+// been parsed with parseStyleSheet(), in the format seedDeclarationBlocks() takes.
+function getDeclarationBlockSnapshots(cssText) {
+  const entries = new Map();
+  function visit(nodes) {
+    for (const node of nodes) {
+      if (!node.block?.children) {
+        continue;
+      }
+      if (node.type === "Rule" && isPlainDeclarationBlock(node.block)) {
+        const key = declarationBlockKey(node.block);
+        const snapshot = declarationBlocksByText.get(key);
+        if (snapshot === undefined) {
+          throw new Error(`No cached declaration block for ${JSON.stringify(key)}`);
+        }
+        entries.set(key, [key, [...snapshot.values], [...snapshot.priorities]]);
+      } else if (node.type === "Atrule") {
+        visit(node.block.children);
+      }
+    }
+  }
+  visit(parseStylesheetText(cssText).children);
+  return [...entries.values()];
 }
 
 // Whether a block only holds declarations that apply as is (see the nesting disambiguation below).
@@ -1151,3 +1195,5 @@ exports.parseIntoStyleSheet = parseIntoStyleSheet;
 exports.parseRule = parseRule;
 exports.parseKeyframeRule = parseKeyframeRule;
 exports.parseDeclarationsAsNestedRule = parseDeclarationsAsNestedRule;
+exports.seedDeclarationBlocks = seedDeclarationBlocks;
+exports.getDeclarationBlockSnapshots = getDeclarationBlockSnapshots;
