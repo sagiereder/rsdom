@@ -115,7 +115,7 @@ jobs:
         if: matrix.smoke == 'wasm'
         run: >-
           node -e "const a = require('./npm/wasm32-wasi/loader.js').load('dist/${{ matrix.file }}');
-          console.log(Object.keys(a), a.parseHtmlDocument('<p>ok', true).ops.length)"
+          console.log(Object.keys(a), a.parseHtmlDocument('<p>ok', true, false, false).ops.length)"
       - name: Smoke test (load the addon on Alpine)
         if: matrix.smoke == 'docker-alpine'
         run: >-
