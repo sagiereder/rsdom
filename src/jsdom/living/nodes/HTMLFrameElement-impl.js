@@ -8,7 +8,8 @@ const { computedMIMEType } = require("whatwg-mimetype");
 const window = require("../../browser/Window");
 const HTMLElementImpl = require("./HTMLElement-impl").implementation;
 const { evaluateJavaScriptURL } = require("../window/navigation");
-const { parseIntoDocument } = require("../../browser/parser");
+const { parseIntoDocument, parseHTMLBytesIntoDocument } = require("../../browser/parser");
+const { sniffHTMLEncoding: sniffHTMLBytesEncoding } = require("../../browser/parser/html-encoding");
 const { fireAnEvent } = require("../helpers/events");
 const { getAttributeValue } = require("../attributes");
 
@@ -48,18 +49,23 @@ function fetchFrame(serializedURL, frame, document, contentDoc) {
     }
     contentDoc.contentType = contentType.essence;
 
-    contentDoc._encoding = sniffHTMLEncoding(data, {
-      xml,
-      transportLayerEncodingLabel,
-      // half-assed implementation of
-      // https://html.spec.whatwg.org/multipage/parsing.html#determining-the-character-encoding step 6
-      defaultEncoding: xml ? "UTF-8" : document._encoding
-    });
-
-    const html = legacyHookDecode(data, contentDoc._encoding);
+    // half-assed implementation of
+    // https://html.spec.whatwg.org/multipage/parsing.html#determining-the-character-encoding step 6
+    if (xml) {
+      contentDoc._encoding = sniffHTMLEncoding(data, { xml, transportLayerEncodingLabel, defaultEncoding: "UTF-8" });
+    } else {
+      contentDoc._encoding = sniffHTMLBytesEncoding(data, {
+        transportLayerEncodingLabel,
+        defaultEncoding: document._encoding
+      });
+    }
 
     try {
-      parseIntoDocument(html, contentDoc);
+      if (xml) {
+        parseIntoDocument(legacyHookDecode(data, contentDoc._encoding), contentDoc);
+      } else {
+        parseHTMLBytesIntoDocument(data, contentDoc._encoding, contentDoc);
+      }
     } catch (error) {
       const { DOMException } = contentDoc._globalObject;
 

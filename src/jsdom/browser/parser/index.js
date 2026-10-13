@@ -33,5 +33,7 @@ function parseIntoDocument(markup, ownerDocument) {
 
 module.exports = {
   parseFragment,
-  parseIntoDocument
+  parseIntoDocument,
+  // HTML documents only: decodes bytes as an encoding and parses the result. Returns false if the text was empty.
+  parseHTMLBytesIntoDocument: htmlParser.parseBytesIntoDocument
 };

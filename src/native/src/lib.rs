@@ -6,3 +6,4 @@ pub fn native_version() -> String {
 }
 
 pub mod html_parser;
+pub mod html_encoding;

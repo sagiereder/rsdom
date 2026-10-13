@@ -13,7 +13,8 @@ const { getGlobalDispatcher } = require("undici");
 const idlUtils = require("./generated/idl/utils.js");
 const VirtualConsole = require("./jsdom/virtual-console.js");
 const { createWindow } = require("./jsdom/browser/Window.js");
-const { parseIntoDocument } = require("./jsdom/browser/parser");
+const { parseIntoDocument, parseHTMLBytesIntoDocument } = require("./jsdom/browser/parser");
+const { sniffHTMLEncoding: sniffHTMLBytesEncoding } = require("./jsdom/browser/parser/html-encoding.js");
 const { fragmentSerialization } = require("./jsdom/living/domparsing/serialization.js");
 const createDecompressInterceptor = require("./jsdom/browser/resources/decompress-interceptor.js");
 const {
@@ -34,7 +35,7 @@ let sharedFragmentDocument = null;
 class JSDOM {
   constructor(input = "", options = {}) {
     const mimeType = new MIMEType(options.contentType === undefined ? "text/html" : options.contentType);
-    const { html, encoding } = normalizeHTML(input, mimeType);
+    const { html, encoding } = normalizeHTML(input, mimeType, options.beforeParse !== undefined);
 
     const normalized = normalizeOptions(options, encoding, mimeType);
 
@@ -44,7 +45,11 @@ class JSDOM {
 
     normalized.beforeParse(this[window]._globalProxy);
 
-    parseIntoDocument(html, documentImpl);
+    if (typeof html === "string") {
+      parseIntoDocument(html, documentImpl);
+    } else {
+      parseHTMLBytesIntoDocument(html, encoding, documentImpl);
+    }
 
     documentImpl.close();
   }
@@ -273,7 +278,8 @@ function createResourceSettings(resources, cookieJar) {
   };
 }
 
-function normalizeHTML(html, mimeType) {
+// Returns the markup as a string, or, for HTML given as bytes, the bytes, which the parser decodes.
+function normalizeHTML(html, mimeType, hasBeforeParse) {
   let encoding = "UTF-8";
 
   if (html instanceof Uint8Array) {
@@ -285,11 +291,17 @@ function normalizeHTML(html, mimeType) {
   }
 
   if (html instanceof Uint8Array) {
-    encoding = sniffHTMLEncoding(html, {
-      xml: mimeType.isXML(),
-      transportLayerEncodingLabel: mimeType.parameters.get("charset")
-    });
-    html = legacyHookDecode(html, encoding);
+    const transportLayerEncodingLabel = mimeType.parameters.get("charset");
+    if (mimeType.isXML()) {
+      encoding = sniffHTMLEncoding(html, { xml: true, transportLayerEncodingLabel });
+      html = legacyHookDecode(html, encoding);
+    } else {
+      encoding = sniffHTMLBytesEncoding(html, { transportLayerEncodingLabel });
+      if (hasBeforeParse) {
+        // The bytes are decoded after beforeParse runs, so they must not be the caller's, which it could modify.
+        html = html.slice();
+      }
+    }
   } else {
     html = String(html);
   }

@@ -3,6 +3,7 @@
 // stream (see src/native/src/html_parser.rs) that is replayed here, performing exactly the operations that jsdom's
 // parse5 tree adapter (./html.js) performs, in the same order.
 
+const { legacyHookDecode } = require("@exodus/bytes/encoding.js");
 const native = require("../../native");
 
 const { createElement, getHTMLElementInterface } = require("../../living/helpers/create-element");
@@ -481,36 +482,66 @@ function parseFragment(markup, contextElement, ownerDocument) {
 
 const scriptsMayRunPattern = /<(?:script|iframe|frame|object|embed)/i;
 
+// Script can run in the middle of parsing (inline scripts executing when popped, custom element constructors, nested
+// browsing contexts). Replaying the instruction stream is faithful to parse5's sequence of tree operations, but parse5
+// consults the live DOM when making tree construction decisions, which script could have modified. Keep the
+// incremental parse5 path whenever that is possible.
+function scriptsMayRun(documentImpl) {
+  const window = documentImpl._defaultView;
+  return Boolean(window) && window._settings.runScripts === "dangerously";
+}
+
+function customElementsDefined(documentImpl) {
+  if (!documentImpl._defaultView) {
+    return false;
+  }
+  const registry = implForWrapper(documentImpl._globalObject._customElementRegistry);
+  return Boolean(registry) && registry._customElementDefinitions.length > 0;
+}
+
 // Returns true if the document was parsed natively; false if the caller must fall back to parse5.
 function parseIntoDocument(markup, documentImpl) {
   if (!canUseNative(markup) || documentImpl._parseOptions.sourceCodeLocationInfo) {
     return false;
   }
-
-  // Script can run in the middle of parsing (inline scripts executing when popped, custom element constructors,
-  // nested browsing contexts). Replaying the instruction stream is faithful to parse5's sequence of tree operations,
-  // but parse5 consults the live DOM when making tree construction decisions, which script could have modified. Keep
-  // the incremental parse5 path whenever that is possible.
-  const window = documentImpl._defaultView;
-  if (window) {
-    if (window._settings.runScripts === "dangerously" && scriptsMayRunPattern.test(markup)) {
-      return false;
-    }
-    const registry = implForWrapper(documentImpl._globalObject._customElementRegistry);
-    if (registry && registry._customElementDefinitions.length > 0) {
-      return false;
-    }
+  if ((scriptsMayRun(documentImpl) && scriptsMayRunPattern.test(markup)) || customElementsDefined(documentImpl)) {
+    return false;
   }
 
-  const result = native.parseHtmlDocument(markup, scriptingEnabled(documentImpl));
+  replayDocument(native.parseHtmlDocument(markup, scriptingEnabled(documentImpl)), documentImpl);
+  return true;
+}
 
+// Decodes `bytes` as `encoding` (https://encoding.spec.whatwg.org/#decode) and parses the result into the document.
+// The addon does both in one call, so the markup never becomes a JS string. Returns null if the document was parsed
+// natively from the (non-empty) decoded text; otherwise returns the decoded text, which the caller must parse.
+function parseBytesIntoDocument(bytes, encoding, documentImpl) {
+  if (native === null || documentImpl._parseOptions.sourceCodeLocationInfo || customElementsDefined(documentImpl)) {
+    return legacyHookDecode(bytes, encoding);
+  }
+
+  // The addon declines (returning the decoded text) when the text is empty or, if asked to, when scripts may run.
+  const scripting = scriptingEnabled(documentImpl);
+  const result = native.parseHtmlDocumentBytes(bytes, encoding, scripting, scriptsMayRun(documentImpl));
+  if (result === null) {
+    // Not an encoding encoding_rs knows; legacyHookDecode() decides (and throws, as it always has, if it is unknown).
+    return legacyHookDecode(bytes, encoding);
+  }
+  if (typeof result === "string") {
+    return result;
+  }
+  replayDocument(result, documentImpl);
+  return null;
+}
+
+function replayDocument(result, documentImpl) {
   const names = decodeNames(result);
 
   // Mutation observers on the document would see one record per top-level node instead of one per parser insertion.
   const observers = documentImpl._registeredObserverList;
   if (!canReplayFast(names) || (observers !== null && observers.length > 0)) {
     replay(result, names, documentImpl, false);
-    return true;
+    return;
   }
 
   // Build the tree detached, in a temporary container, then insert each top-level node into the document with the
@@ -534,10 +565,10 @@ function parseIntoDocument(markup, documentImpl) {
   for (const script of poppedScripts) {
     script._poppedOffStackOfOpenElements();
   }
-  return true;
 }
 
 module.exports = {
   parseFragment,
-  parseIntoDocument
+  parseIntoDocument,
+  parseBytesIntoDocument
 };
