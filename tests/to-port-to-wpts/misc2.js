@@ -505,6 +505,14 @@ describe("jsdom/miscellaneous", () => {
     );
   });
 
+  specify("the base URL comes from the first HTML base element with an href attribute in no namespace", () => {
+    const { document } = (new JSDOM(
+      `<base xlink:href="/a/"><svg><base href="/b/"></base></svg><base :href="/c/"><base href="/d/">`,
+      { url: "http://example.com/" }
+    )).window;
+    assert.equal(document.baseURI, "http://example.com/d/");
+  });
+
   // these tests require file system access or they start a http server
   describe("node specific tests", () => {
     specify("jquery_val_on_selects", { async: true }, t => {

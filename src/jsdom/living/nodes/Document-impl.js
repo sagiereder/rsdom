@@ -321,11 +321,23 @@ class DocumentImpl extends NodeImpl {
     this._baseTargetElementCache = undefined;
   }
 
+  // The first HTML base element in tree order with the given (null namespace) attribute. Not
+  // querySelector("base[href]"), which also matches a base element in another namespace, or one with an attribute named
+  // "xlink:href" (whose href attribute in the null namespace is then missing).
+  _firstBaseWithAttribute(name) {
+    for (const node of this._descendants()) {
+      if (node._localName === "base" && node._namespaceURI === HTML_NS && node.hasAttributeNS(null, name)) {
+        return node;
+      }
+    }
+    return null;
+  }
+
   // The first base element with a target attribute, used by https://html.spec.whatwg.org/#get-an-element's-target.
   // Cached like the base URL: HTMLBaseElement-impl.js clears it when a base element is inserted, removed or changes.
   _firstBaseWithTarget() {
     if (this._baseTargetElementCache === undefined) {
-      this._baseTargetElementCache = this.querySelector("base[target]");
+      this._baseTargetElementCache = this._firstBaseWithAttribute("target");
     }
     return this._baseTargetElementCache;
   }
@@ -336,7 +348,7 @@ class DocumentImpl extends NodeImpl {
       return this._baseURLCache;
     }
 
-    const firstBase = this.querySelector("base[href]");
+    const firstBase = this._firstBaseWithAttribute("href");
 
     this._baseURLCache = firstBase === null ?
       this._fallbackBaseURL() :
