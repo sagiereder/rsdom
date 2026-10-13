@@ -1,6 +1,6 @@
 {
   "name": "@rsdom/core-wasm32-wasi",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "The WebAssembly build of rsdom's Rust core, used where no prebuilt native binary is available",
   "license": "MIT",
   "repository": {
