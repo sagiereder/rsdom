@@ -1,0 +1,624 @@
+[
+  {
+    "name": "radix-primitives",
+    "impl": "rsdom",
+    "wallMs": 10154,
+    "breakdown": {
+      "profiles": 48,
+      "cpuMs": 30406,
+      "idleMs": 17337,
+      "categories": [
+        {
+          "name": "node core",
+          "ms": 15960,
+          "pct": 52.5
+        },
+        {
+          "name": "DOM",
+          "ms": 6612,
+          "pct": 21.7
+        },
+        {
+          "name": "React",
+          "ms": 2302,
+          "pct": 7.6
+        },
+        {
+          "name": "test runner",
+          "ms": 1419,
+          "pct": 4.7
+        },
+        {
+          "name": "GC",
+          "ms": 1397,
+          "pct": 4.6
+        },
+        {
+          "name": "Testing Library",
+          "ms": 1075,
+          "pct": 3.5
+        },
+        {
+          "name": "transform/compile",
+          "ms": 720,
+          "pct": 2.4
+        },
+        {
+          "name": "project code + other libraries",
+          "ms": 665,
+          "pct": 2.2
+        },
+        {
+          "name": "V8/native (unattributed)",
+          "ms": 247,
+          "pct": 0.8
+        },
+        {
+          "name": "other",
+          "ms": 7,
+          "pct": 0
+        }
+      ],
+      "domAreas": [
+        {
+          "name": "window setup/teardown",
+          "ms": 3211,
+          "pct": 10.6
+        },
+        {
+          "name": "style/getComputedStyle",
+          "ms": 1611,
+          "pct": 5.3
+        },
+        {
+          "name": "DOM tree ops",
+          "ms": 576,
+          "pct": 1.9
+        },
+        {
+          "name": "other DOM",
+          "ms": 497,
+          "pct": 1.6
+        },
+        {
+          "name": "events",
+          "ms": 387,
+          "pct": 1.3
+        },
+        {
+          "name": "selectors",
+          "ms": 173,
+          "pct": 0.6
+        },
+        {
+          "name": "parsing/serialization",
+          "ms": 120,
+          "pct": 0.4
+        },
+        {
+          "name": "mutation observers",
+          "ms": 26,
+          "pct": 0.1
+        },
+        {
+          "name": "accessibility/layout props",
+          "ms": 11,
+          "pct": 0
+        }
+      ],
+      "topDomFunctions": [
+        {
+          "name": "exports.installInterfaces rsdom:living/interfaces.js:256",
+          "ms": 834,
+          "pct": 2.7
+        },
+        {
+          "name": "qr @asamuzakjp/css-color/dist/esm/index.js:3072",
+          "ms": 261,
+          "pct": 0.9
+        },
+        {
+          "name": "(anonymous) rsdom:living/css/CSSStyleProperties-impl.js:1",
+          "ms": 214,
+          "pct": 0.7
+        },
+        {
+          "name": "mix css-tree/cjs/syntax/config/mix.cjs:38",
+          "ms": 120,
+          "pct": 0.4
+        },
+        {
+          "name": "Kt @asamuzakjp/css-color/dist/esm/index.js:1394",
+          "ms": 76,
+          "pct": 0.2
+        },
+        {
+          "name": "visit rsdom:living/css/helpers/css-values.js:164",
+          "ms": 65,
+          "pct": 0.2
+        },
+        {
+          "name": "peek css-tree/cjs/definition-syntax/parse.cjs:484",
+          "ms": 65,
+          "pct": 0.2
+        },
+        {
+          "name": "createDescriptor css-tree/cjs/lexer/Lexer.cjs:177",
+          "ms": 54,
+          "pct": 0.2
+        },
+        {
+          "name": "internalMatch css-tree/cjs/lexer/match.cjs:93",
+          "ms": 52,
+          "pct": 0.2
+        },
+        {
+          "name": "d lru-cache/dist/esm/node/index.min.js:1",
+          "ms": 47,
+          "pct": 0.2
+        },
+        {
+          "name": "matchAsTree css-tree/cjs/lexer/match.cjs:584",
+          "ms": 45,
+          "pct": 0.1
+        },
+        {
+          "name": "toLastModifiedString rsdom:living/nodes/Document-impl.js:121",
+          "ms": 39,
+          "pct": 0.1
+        },
+        {
+          "name": "parsePropertyValue rsdom:living/css/helpers/css-values.js:479",
+          "ms": 37,
+          "pct": 0.1
+        },
+        {
+          "name": "Lexer css-tree/cjs/lexer/Lexer.cjs:106",
+          "ms": 34,
+          "pct": 0.1
+        },
+        {
+          "name": "readImplicitGroup css-tree/cjs/definition-syntax/parse.cjs:391",
+          "ms": 34,
+          "pct": 0.1
+        },
+        {
+          "name": "(anonymous) rsdom:src/generated/css-property-descriptors.js:1",
+          "ms": 34,
+          "pct": 0.1
+        },
+        {
+          "name": "(anonymous) @asamuzakjp/css-color/dist/esm/index.js:1",
+          "ms": 33,
+          "pct": 0.1
+        },
+        {
+          "name": "addEventListener rsdom:living/events/EventTarget-impl.js:46",
+          "ms": 33,
+          "pct": 0.1
+        },
+        {
+          "name": "tokenize css-tree/cjs/tokenizer/index.cjs:10",
+          "ms": 33,
+          "pct": 0.1
+        },
+        {
+          "name": "Qn @asamuzakjp/css-color/dist/esm/index.js:2519",
+          "ms": 28,
+          "pct": 0.1
+        },
+        {
+          "name": "(anonymous) @bramus/specificity/dist/index.cjs:1",
+          "ms": 28,
+          "pct": 0.1
+        },
+        {
+          "name": "J @asamuzakjp/css-color/dist/esm/index.js:3217",
+          "ms": 28,
+          "pct": 0.1
+        },
+        {
+          "name": "readMultiplier css-tree/cjs/definition-syntax/parse.cjs:67",
+          "ms": 26,
+          "pct": 0.1
+        },
+        {
+          "name": "maybeMultiplied css-tree/cjs/definition-syntax/parse.cjs:145",
+          "ms": 25,
+          "pct": 0.1
+        },
+        {
+          "name": "applyIndexedStyleSheetRules rsdom:living/css/helpers/computed-style.js:101",
+          "ms": 25,
+          "pct": 0.1
+        },
+        {
+          "name": "get rsdom:src/generated/idl/Document.js:3057",
+          "ms": 25,
+          "pct": 0.1
+        },
+        {
+          "name": "addEventListener rsdom:src/generated/idl/EventTarget.js:101",
+          "ms": 25,
+          "pct": 0.1
+        },
+        {
+          "name": "at @asamuzakjp/css-color/dist/esm/index.js:217",
+          "ms": 24,
+          "pct": 0.1
+        },
+        {
+          "name": "ir @asamuzakjp/css-color/dist/esm/index.js:2700",
+          "ms": 23,
+          "pct": 0.1
+        },
+        {
+          "name": "#resolveLonghandDefault rsdom:living/css/CSSStyleDeclaration-impl.js:681",
+          "ms": 22,
+          "pct": 0.1
+        }
+      ],
+      "processes": [
+        {
+          "file": "55243-1791894777019.cpuprofile",
+          "cpuMs": 1199
+        },
+        {
+          "file": "55248-1791894768359.cpuprofile",
+          "cpuMs": 1081
+        },
+        {
+          "file": "55247-1791894768500.cpuprofile",
+          "cpuMs": 1073
+        },
+        {
+          "file": "55263-1791894773189.cpuprofile",
+          "cpuMs": 910
+        },
+        {
+          "file": "55249-1791894768590.cpuprofile",
+          "cpuMs": 888
+        },
+        {
+          "file": "55265-1791894773132.cpuprofile",
+          "cpuMs": 853
+        },
+        {
+          "file": "55254-1791894770393.cpuprofile",
+          "cpuMs": 846
+        },
+        {
+          "file": "55255-1791894770600.cpuprofile",
+          "cpuMs": 840
+        },
+        {
+          "file": "55266-1791894773393.cpuprofile",
+          "cpuMs": 837
+        },
+        {
+          "file": "55257-1791894771295.cpuprofile",
+          "cpuMs": 835
+        },
+        {
+          "file": "55256-1791894770932.cpuprofile",
+          "cpuMs": 803
+        },
+        {
+          "file": "55258-1791894771503.cpuprofile",
+          "cpuMs": 792
+        }
+      ]
+    }
+  },
+  {
+    "name": "react-redux",
+    "impl": "rsdom",
+    "wallMs": 2183,
+    "breakdown": {
+      "profiles": 16,
+      "cpuMs": 6302,
+      "idleMs": 2659,
+      "categories": [
+        {
+          "name": "node core",
+          "ms": 3801,
+          "pct": 60.3
+        },
+        {
+          "name": "DOM",
+          "ms": 736,
+          "pct": 11.7
+        },
+        {
+          "name": "React",
+          "ms": 455,
+          "pct": 7.2
+        },
+        {
+          "name": "GC",
+          "ms": 384,
+          "pct": 6.1
+        },
+        {
+          "name": "test runner",
+          "ms": 364,
+          "pct": 5.8
+        },
+        {
+          "name": "project code + other libraries",
+          "ms": 197,
+          "pct": 3.1
+        },
+        {
+          "name": "transform/compile",
+          "ms": 196,
+          "pct": 3.1
+        },
+        {
+          "name": "Testing Library",
+          "ms": 117,
+          "pct": 1.9
+        },
+        {
+          "name": "V8/native (unattributed)",
+          "ms": 52,
+          "pct": 0.8
+        },
+        {
+          "name": "other",
+          "ms": 1,
+          "pct": 0
+        }
+      ],
+      "domAreas": [
+        {
+          "name": "window setup/teardown",
+          "ms": 422,
+          "pct": 6.7
+        },
+        {
+          "name": "other DOM",
+          "ms": 122,
+          "pct": 1.9
+        },
+        {
+          "name": "style/getComputedStyle",
+          "ms": 106,
+          "pct": 1.7
+        },
+        {
+          "name": "DOM tree ops",
+          "ms": 47,
+          "pct": 0.8
+        },
+        {
+          "name": "events",
+          "ms": 25,
+          "pct": 0.4
+        },
+        {
+          "name": "selectors",
+          "ms": 10,
+          "pct": 0.2
+        },
+        {
+          "name": "parsing/serialization",
+          "ms": 2,
+          "pct": 0
+        },
+        {
+          "name": "mutation observers",
+          "ms": 1,
+          "pct": 0
+        },
+        {
+          "name": "accessibility/layout props",
+          "ms": 1,
+          "pct": 0
+        }
+      ],
+      "topDomFunctions": [
+        {
+          "name": "exports.installInterfaces rsdom:living/interfaces.js:256",
+          "ms": 252,
+          "pct": 4
+        },
+        {
+          "name": "(anonymous) rsdom:living/css/CSSStyleProperties-impl.js:1",
+          "ms": 67,
+          "pct": 1.1
+        },
+        {
+          "name": "(anonymous) rsdom:src/generated/css-property-descriptors.js:1",
+          "ms": 12,
+          "pct": 0.2
+        },
+        {
+          "name": "exports.mixin rsdom:utils.js:17",
+          "ms": 8,
+          "pct": 0.1
+        },
+        {
+          "name": "exports.createWindow rsdom:browser/Window.js:42",
+          "ms": 8,
+          "pct": 0.1
+        },
+        {
+          "name": "(anonymous) @bramus/specificity/dist/index.cjs:1",
+          "ms": 8,
+          "pct": 0.1
+        },
+        {
+          "name": "addEventListener rsdom:living/events/EventTarget-impl.js:46",
+          "ms": 8,
+          "pct": 0.1
+        },
+        {
+          "name": "toLastModifiedString rsdom:living/nodes/Document-impl.js:121",
+          "ms": 7,
+          "pct": 0.1
+        },
+        {
+          "name": "(anonymous) rsdom:src/generated/css-property-definitions.js:1",
+          "ms": 7,
+          "pct": 0.1
+        },
+        {
+          "name": "replayDocument rsdom:browser/parser/html-native.js:537",
+          "ms": 7,
+          "pct": 0.1
+        },
+        {
+          "name": "mix css-tree/cjs/syntax/config/mix.cjs:38",
+          "ms": 7,
+          "pct": 0.1
+        },
+        {
+          "name": "(anonymous) tr46/lib/regexes.js:1",
+          "ms": 7,
+          "pct": 0.1
+        },
+        {
+          "name": "URLStateMachine whatwg-url/lib/url-state-machine.js:448",
+          "ms": 6,
+          "pct": 0.1
+        },
+        {
+          "name": "(anonymous) whatwg-url/index.js:1",
+          "ms": 5,
+          "pct": 0.1
+        },
+        {
+          "name": "exports.convert rsdom:src/generated/idl/PointerEventInit.js:233",
+          "ms": 5,
+          "pct": 0.1
+        },
+        {
+          "name": "importProjectVitest rsdom:src/integrations/vitest.js:45",
+          "ms": 5,
+          "pct": 0.1
+        },
+        {
+          "name": "implForWrapper rsdom:src/generated/idl/utils.js:153",
+          "ms": 4,
+          "pct": 0.1
+        },
+        {
+          "name": "installOwnProperties rsdom:browser/Window.js:214",
+          "ms": 4,
+          "pct": 0.1
+        },
+        {
+          "name": "_clearStyleCache rsdom:living/nodes/Document-impl.js:272",
+          "ms": 4,
+          "pct": 0.1
+        },
+        {
+          "name": "peek rsdom:living/helpers/selectors/parser.js:113",
+          "ms": 4,
+          "pct": 0.1
+        },
+        {
+          "name": "(anonymous) decimal.js/decimal.js:1",
+          "ms": 3,
+          "pct": 0
+        },
+        {
+          "name": "createGenericPropertyDescriptor rsdom:living/css/helpers/generic-property-descriptor.js:24",
+          "ms": 3,
+          "pct": 0
+        },
+        {
+          "name": "exports.install rsdom:src/generated/idl/CSSStyleProperties.js:145",
+          "ms": 3,
+          "pct": 0
+        },
+        {
+          "name": "Lexer css-tree/cjs/lexer/Lexer.cjs:106",
+          "ms": 3,
+          "pct": 0
+        },
+        {
+          "name": "matchAsTree css-tree/cjs/lexer/match.cjs:584",
+          "ms": 3,
+          "pct": 0
+        },
+        {
+          "name": "cr @bramus/specificity/dist/index.cjs:1",
+          "ms": 3,
+          "pct": 0
+        },
+        {
+          "name": "registerWrapper whatwg-url/lib/utils.js:113",
+          "ms": 3,
+          "pct": 0
+        },
+        {
+          "name": "(anonymous) undici/lib/llhttp/constants.js:1",
+          "ms": 3,
+          "pct": 0
+        },
+        {
+          "name": "addEventListener rsdom:src/generated/idl/EventTarget.js:101",
+          "ms": 3,
+          "pct": 0
+        },
+        {
+          "name": "JSDOM rsdom:src/api.js:36",
+          "ms": 3,
+          "pct": 0
+        }
+      ],
+      "processes": [
+        {
+          "file": "55303-1791894779034.cpuprofile",
+          "cpuMs": 1092
+        },
+        {
+          "file": "55305-1791894778060.cpuprofile",
+          "cpuMs": 427
+        },
+        {
+          "file": "55304-1791894778074.cpuprofile",
+          "cpuMs": 420
+        },
+        {
+          "file": "55307-1791894778467.cpuprofile",
+          "cpuMs": 414
+        },
+        {
+          "file": "55308-1791894778522.cpuprofile",
+          "cpuMs": 412
+        },
+        {
+          "file": "55309-1791894778534.cpuprofile",
+          "cpuMs": 408
+        },
+        {
+          "file": "55302-1791894779513.cpuprofile",
+          "cpuMs": 374
+        },
+        {
+          "file": "55306-1791894778004.cpuprofile",
+          "cpuMs": 367
+        },
+        {
+          "file": "55311-1791894778920.cpuprofile",
+          "cpuMs": 345
+        },
+        {
+          "file": "55310-1791894778857.cpuprofile",
+          "cpuMs": 340
+        },
+        {
+          "file": "55313-1791894779154.cpuprofile",
+          "cpuMs": 325
+        },
+        {
+          "file": "55314-1791894779217.cpuprofile",
+          "cpuMs": 316
+        }
+      ]
+    }
+  }
+]

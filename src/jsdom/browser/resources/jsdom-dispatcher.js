@@ -9,10 +9,7 @@ const { toBase64 } = require("@exodus/bytes/base64.js");
 const { utf8Encode } = require("../../living/helpers/encoding");
 const { sendStreamResponse } = require("./stream-handler");
 
-const packageVersion = require("../../../../package.json").version;
-
-const DEFAULT_USER_AGENT = `Mozilla/5.0 (${process.platform || "unknown OS"}) AppleWebKit/537.36 ` +
-                           `(KHTML, like Gecko) jsdom/${packageVersion}`;
+const DEFAULT_USER_AGENT = require("./default-user-agent");
 const MAX_REDIRECTS = 20;
 
 // https://fetch.spec.whatwg.org/#bad-port

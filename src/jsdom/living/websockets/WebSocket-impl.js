@@ -1,5 +1,4 @@
 "use strict";
-const { WebSocket } = require("undici");
 const { parseURL, serializeURL, serializeURLOrigin } = require("whatwg-url");
 const { setupForSimpleEventAccessors } = require("../helpers/create-event-accessor");
 const { fireAnEvent } = require("../helpers/events");
@@ -51,6 +50,8 @@ class WebSocketImpl extends EventTargetImpl {
     };
 
     this._ws = wrapAndRethrowNodeDOMExceptions(() => {
+      // Required here rather than at the top so that loading jsdom does not load undici.
+      const { WebSocket } = require("undici");
       return new WebSocket(serializeURL(urlRecord), wsOptions);
     }, this._globalObject);
 

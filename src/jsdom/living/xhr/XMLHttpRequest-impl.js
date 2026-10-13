@@ -195,7 +195,8 @@ class XMLHttpRequestImpl extends XMLHttpRequestEventTargetImpl {
     this._overrideMIMEType = null;
     this._overrideCharset = null;
     this._requestManager = _ownerDocument._requestManager;
-    this._dispatcher = window._settings.dispatcher;
+    // Read `dispatcher` from the settings at send time: creating it loads undici, so creating an XHR should not.
+    this._windowSettings = window._settings;
     this._cookieJar = _ownerDocument._cookieJar;
     this._encoding = _ownerDocument._encoding;
     this._origin = window._origin;
@@ -730,7 +731,7 @@ class XMLHttpRequestImpl extends XMLHttpRequestEventTargetImpl {
       (async () => {
         try {
           const response = await performFetch(
-            this._dispatcher,
+            this._windowSettings.dispatcher,
             {
               url: this._url,
               method: this._method,

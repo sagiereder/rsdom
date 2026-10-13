@@ -135,3 +135,7 @@ Regenerate these tables with `node bench/report.js` after a full `node bench/run
 <!-- BENCH:END -->
 
 Notes on happy-dom 20.14.6: `tables/sort-rows` needs `HTMLTableSectionElement.rows`, which it doesn't implement. In `selectors/complex-qsa` it returns wrong results (`:enabled` matches nothing, and a sibling-combinator query returns duplicates). In `style/computed-style` it does less work (values such as colours and `calc()` are not resolved).
+
+## Real test suites
+
+[`bench/real-suites/`](bench/real-suites/README.md) runs the real Jest and Vitest suites of six open-source React projects (react-hook-form, downshift, mantine, radix-primitives, ariakit, react-redux), pinned to fixed commits. It runs them with each project's own jsdom, jsdom 30.1.2, rsdom and happy-dom, and compares wall time and per-test results. It also has a CPU-profile breakdown and a measurement of animation-frame waits.

@@ -8,17 +8,13 @@ const whatwgURL = require("whatwg-url");
 const { legacyHookDecode } = require("@exodus/bytes/encoding.js");
 const { URL } = require("whatwg-url");
 const { MIMEType } = require("whatwg-mimetype");
-const { getGlobalDispatcher } = require("undici");
 const idlUtils = require("./generated/idl/utils.js");
 const VirtualConsole = require("./jsdom/virtual-console.js");
 const { createWindow } = require("./jsdom/browser/Window.js");
 const { parseIntoDocument, parseHTMLBytesIntoDocument } = require("./jsdom/browser/parser");
 const { sniffHTMLEncoding, sniffXMLEncoding } = require("./jsdom/browser/parser/html-encoding.js");
 const { fragmentSerialization } = require("./jsdom/living/domparsing/serialization.js");
-const createDecompressInterceptor = require("./jsdom/browser/resources/decompress-interceptor.js");
-const {
-  JSDOMDispatcher, DEFAULT_USER_AGENT, fetchCollected
-} = require("./jsdom/browser/resources/jsdom-dispatcher.js");
+const DEFAULT_USER_AGENT = require("./jsdom/browser/resources/default-user-agent.js");
 const requestInterceptor = require("./jsdom/browser/resources/request-interceptor.js");
 
 class CookieJar extends toughCookie.CookieJar {
@@ -132,6 +128,7 @@ class JSDOM {
       headers.Referer = options.referrer;
     }
 
+    const { fetchCollected } = require("./jsdom/browser/resources/jsdom-dispatcher.js");
     const response = await fetchCollected(dispatcher, {
       url,
       headers
@@ -228,16 +225,19 @@ function normalizeOptions(options, encoding, mimeType) {
   const pretendToBeVisual = Boolean(options.pretendToBeVisual);
   const storageQuota = options.storageQuota === undefined ? 5000000 : Number(options.storageQuota);
 
+  const settings = {
+    runScripts,
+    pretendToBeVisual,
+    storageQuota,
+    cookieJar,
+    virtualConsole
+  };
+  // Copy descriptors rather than spreading, so that the lazy `dispatcher` getter stays lazy.
+  Object.defineProperties(settings, Object.getOwnPropertyDescriptors(resourceSettings));
+
   return {
     windowOptions: {
-      settings: {
-        runScripts,
-        pretendToBeVisual,
-        storageQuota,
-        cookieJar,
-        virtualConsole,
-        ...resourceSettings
-      },
+      settings,
       documentOptions: {
         url,
         referrer,
@@ -259,19 +259,31 @@ function createResourceSettings(resources, cookieJar) {
 
   const {
     userAgent = DEFAULT_USER_AGENT,
-    dispatcher = getGlobalDispatcher(),
+    dispatcher: baseDispatcher,
     interceptors = []
   } = resourceOptions;
+  const userInterceptors = [...interceptors];
 
+  // The dispatcher is created on first use. Building it loads undici, which costs more than the rest of window setup
+  // and is not needed by documents that never fetch anything (the common case in test environments).
+  let dispatcher;
   return {
     userAgent,
-    dispatcher: new JSDOMDispatcher({
-      baseDispatcher: dispatcher,
-      cookieJar,
-      userAgent,
-      // User interceptors come first (outermost), then the decompression interceptor.
-      userInterceptors: [...interceptors, createDecompressInterceptor()]
-    }),
+    get dispatcher() {
+      if (dispatcher === undefined) {
+        const { getGlobalDispatcher } = require("undici");
+        const { JSDOMDispatcher } = require("./jsdom/browser/resources/jsdom-dispatcher.js");
+        const createDecompressInterceptor = require("./jsdom/browser/resources/decompress-interceptor.js");
+        dispatcher = new JSDOMDispatcher({
+          baseDispatcher: baseDispatcher === undefined ? getGlobalDispatcher() : baseDispatcher,
+          cookieJar,
+          userAgent,
+          // User interceptors come first (outermost), then the decompression interceptor.
+          userInterceptors: [...userInterceptors, createDecompressInterceptor()]
+        });
+      }
+      return dispatcher;
+    },
     // This controls automatic subresource fetching; XHR works regardless.
     loadSubresources: resources !== undefined
   };

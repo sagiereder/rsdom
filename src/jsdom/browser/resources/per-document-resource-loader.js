@@ -1,7 +1,6 @@
 "use strict";
 const idlUtils = require("../../../generated/idl/utils");
 const { fireAnEvent } = require("../../living/helpers/events");
-const { fetchCollected } = require("./jsdom-dispatcher");
 
 module.exports = class PerDocumentResourceLoader {
   constructor(document) {
@@ -31,6 +30,8 @@ module.exports = class PerDocumentResourceLoader {
     // calls `window.close()`, the abort controller is already registered and will see the abort.
     this._requestManager.add(abortController);
 
+    // Required here rather than at the top: jsdom-dispatcher.js loads undici, which most documents never need.
+    const { fetchCollected } = require("./jsdom-dispatcher");
     const fetchPromise = fetchCollected(this._settings.dispatcher, {
       url,
       headers: { Referer: this._document.URL },

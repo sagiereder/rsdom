@@ -1,0 +1,3 @@
+# Clones of the projects under test, their installs, run logs and CPU profiles.
+.cache/
+node_modules/
