@@ -220,7 +220,18 @@ function parseIntoDocument(markup, ownerDocument) {
   return loadParse5().parse(markup, config);
 }
 
+// Decodes `bytes` as `encoding` and parses the result into the document. Returns false if the decoded text is empty.
+function parseBytesIntoDocument(bytes, encoding, ownerDocument) {
+  const markup = nativeParser.parseBytesIntoDocument(bytes, encoding, ownerDocument);
+  if (markup === null) {
+    return true;
+  }
+  parseIntoDocument(markup, ownerDocument);
+  return markup !== "";
+}
+
 module.exports = {
   parseFragment,
-  parseIntoDocument
+  parseIntoDocument,
+  parseBytesIntoDocument
 };

@@ -662,9 +662,13 @@ fn finish(sink: Sink) -> ParsedHtml {
 /// Parses a whole HTML document.
 #[napi]
 pub fn parse_html_document(markup: String, scripting_enabled: bool) -> ParsedHtml {
+  parse_document_str(&markup, scripting_enabled)
+}
+
+pub(crate) fn parse_document_str(markup: &str, scripting_enabled: bool) -> ParsedHtml {
   let sink = Sink::new(false, markup.len());
   let parser = html5ever::parse_document(sink, tree_builder_opts(scripting_enabled));
-  let sink = parser.one(StrTendril::from(markup));
+  let sink = parser.one(StrTendril::from_slice(markup));
   finish(sink)
 }
 

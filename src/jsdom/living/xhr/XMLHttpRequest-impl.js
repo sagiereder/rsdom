@@ -18,7 +18,7 @@ const HeaderList = require("../fetch/header-list");
 const { isForbiddenRequestHeader } = require("../fetch/header-types");
 const { performFetch, isNetworkError } = require("./xhr-utils");
 const XMLHttpRequestEventTargetImpl = require("./XMLHttpRequestEventTarget-impl").implementation;
-const { parseIntoDocument } = require("../../browser/parser");
+const { parseIntoDocument, parseHTMLBytesIntoDocument } = require("../../browser/parser");
 const { fragmentSerialization } = require("../domparsing/serialization");
 const {
   copyToArrayBufferInTargetRealmDestructively,
@@ -347,9 +347,10 @@ class XMLHttpRequestImpl extends XMLHttpRequestEventTargetImpl {
     }
 
     const encoding = finalCharset(this) || labelToName(getBOMEncoding(responseBytes)) || "UTF-8";
-    const resText = legacyHookDecode(responseBytes, encoding);
+    // HTML is decoded by the parser, which reports whether the text was empty; nothing can observe the document yet.
+    const resText = isHTML ? null : legacyHookDecode(responseBytes, encoding);
 
-    if (!resText) {
+    if (resText === "") {
       return null;
     }
     const res = Document.createImpl(this._globalObject, [], {
@@ -363,7 +364,13 @@ class XMLHttpRequestImpl extends XMLHttpRequestEventTargetImpl {
       }
     });
     try {
-      parseIntoDocument(resText, res);
+      if (isHTML) {
+        if (!parseHTMLBytesIntoDocument(responseBytes, encoding, res)) {
+          return null;
+        }
+      } else {
+        parseIntoDocument(resText, res);
+      }
     } catch {
       this._responseXMLCache = null;
       return null;
