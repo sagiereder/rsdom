@@ -11,9 +11,9 @@ const { HTML_NS, SVG_NS, MATHML_NS, XLINK_NS, XML_NS, XMLNS_NS } = require("../.
 
 const DocumentType = require("../../../generated/idl/DocumentType");
 const DocumentFragment = require("../../../generated/idl/DocumentFragment");
-const TextImpl = require("../../living/nodes/Text-impl").implementation;
+const Text = require("../../../generated/idl/Text");
 const Comment = require("../../../generated/idl/Comment");
-const AttrImpl = require("../../living/attributes/Attr-impl").implementation;
+const Attr = require("../../../generated/idl/Attr");
 
 const attributes = require("../../living/attributes");
 const treeHelpers = require("../../living/helpers/dom-tree");
@@ -103,7 +103,7 @@ function replay(result, names, documentImpl, isFragment, root, fast, poppedScrip
 
   function createText(text) {
     // The wrapper is created lazily; see Text-impl.js.
-    return new TextImpl(globalObject, [], { data: text, ownerDocument: ownerDocument() });
+    return Text.createImpl(globalObject, [], { data: text, ownerDocument: ownerDocument() });
   }
 
   const insertText = fast ?
@@ -202,7 +202,7 @@ function replay(result, names, documentImpl, isFragment, root, fast, poppedScrip
       const value = strings.slice(off, off + ops[i + 4]);
       const namespace = NAMESPACES[ops[i + 1]];
       // The wrapper is created lazily; see Attr-impl.js.
-      attributeList.push(new AttrImpl(globalObject, [], {
+      attributeList.push(Attr.createImpl(globalObject, [], {
         namespace,
         namespacePrefix: ops[i + 2] === 0 ? null : names[ops[i + 2]],
         localName,

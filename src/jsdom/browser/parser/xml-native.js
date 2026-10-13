@@ -19,8 +19,8 @@ const CDATASection = require("../../../generated/idl/CDATASection");
 const Comment = require("../../../generated/idl/Comment");
 const ProcessingInstruction = require("../../../generated/idl/ProcessingInstruction");
 // Text and Attr wrappers are created lazily; see Text-impl.js and Attr-impl.js.
-const TextImpl = require("../../living/nodes/Text-impl").implementation;
-const AttrImpl = require("../../living/attributes/Attr-impl").implementation;
+const Text = require("../../../generated/idl/Text");
+const Attr = require("../../../generated/idl/Attr");
 
 const attributes = require("../../living/attributes");
 const treeHelpers = require("../../living/helpers/dom-tree");
@@ -158,7 +158,7 @@ function replay(ops, names, markup, extra, root, fast, parseDocType, poppedScrip
       const localName = names[ops[i]];
       const namespace = names[ops[i + 1]];
       const value = str(ops[i + 3], ops[i + 4]);
-      list.push(new AttrImpl(globalObject, [], {
+      list.push(Attr.createImpl(globalObject, [], {
         namespace,
         namespacePrefix: names[ops[i + 2]],
         localName,
@@ -199,7 +199,7 @@ function replay(ops, names, markup, extra, root, fast, parseDocType, poppedScrip
   while (i < end) {
     switch (ops[i]) {
       case OP_TEXT:
-        insert(parent, new TextImpl(globalObject, [], {
+        insert(parent, Text.createImpl(globalObject, [], {
           data: str(ops[i + 1], ops[i + 2]),
           ownerDocument: parent._ownerDocument
         }));

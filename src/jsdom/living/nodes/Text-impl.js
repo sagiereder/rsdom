@@ -4,7 +4,6 @@ const CharacterDataImpl = require("./CharacterData-impl").implementation;
 const DOMException = require("../../../generated/idl/DOMException");
 const NODE_TYPE = require("../node-type");
 const { mixin, defineFieldDefaults } = require("../../utils");
-const { installLazyWrapper } = require("../helpers/lazy-wrapper");
 
 // https://dom.spec.whatwg.org/#text
 class TextImpl extends CharacterDataImpl {
@@ -94,6 +93,3 @@ defineFieldDefaults(TextImpl.prototype, { nodeType: NODE_TYPE.TEXT_NODE, _slotab
 module.exports = {
   implementation: TextImpl
 };
-
-// Text nodes created by `textContent` and the parsers are rarely exposed, so create their wrappers lazily.
-installLazyWrapper(TextImpl, () => require("../../../generated/idl/Text"), "Text");

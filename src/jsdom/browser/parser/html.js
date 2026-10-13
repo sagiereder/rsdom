@@ -8,7 +8,7 @@ const { HTML_NS } = require("../../living/helpers/namespaces");
 const DocumentType = require("../../../generated/idl/DocumentType");
 const DocumentFragment = require("../../../generated/idl/DocumentFragment");
 // Text wrappers are created lazily; see Text-impl.js.
-const TextImpl = require("../../living/nodes/Text-impl").implementation;
+const Text = require("../../../generated/idl/Text");
 const Comment = require("../../../generated/idl/Comment");
 
 const attributes = require("../../living/attributes");
@@ -143,7 +143,7 @@ class JSDOMParse5Adapter {
       lastChild.data += text;
     } else {
       const ownerDocument = this._ownerDocument();
-      const textNode = new TextImpl(this._globalObject, [], { data: text, ownerDocument });
+      const textNode = Text.createImpl(this._globalObject, [], { data: text, ownerDocument });
       parentNode._append(textNode);
     }
   }
@@ -154,7 +154,7 @@ class JSDOMParse5Adapter {
       previousSibling.data += text;
     } else {
       const ownerDocument = this._ownerDocument();
-      const textNode = new TextImpl(this._globalObject, [], { data: text, ownerDocument });
+      const textNode = Text.createImpl(this._globalObject, [], { data: text, ownerDocument });
       parentNode._insert(textNode, referenceNode);
     }
   }

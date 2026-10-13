@@ -4,7 +4,8 @@ const idlUtils = require("../../../generated/idl/utils.js");
 const { DOCUMENT_POSITION_FOLLOWING } = require("../node-document-position");
 
 exports.implementation = class StyleSheetList {
-  constructor() {
+  constructor(globalObject) {
+    this._globalObject = globalObject;
     this._list = [];
   }
 

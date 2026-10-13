@@ -41,8 +41,8 @@ const { clone } = require("../node");
 const Comment = require("../../../generated/idl/Comment");
 const ProcessingInstruction = require("../../../generated/idl/ProcessingInstruction");
 const CDATASection = require("../../../generated/idl/CDATASection");
-const TextImpl = require("./Text-impl").implementation;
-const AttrImpl = require("../attributes/Attr-impl").implementation;
+const Text = require("../../../generated/idl/Text");
+const Attr = require("../../../generated/idl/Attr");
 const DocumentFragment = require("../../../generated/idl/DocumentFragment");
 const DOMImplementation = require("../../../generated/idl/DOMImplementation");
 const TreeWalker = require("../../../generated/idl/TreeWalker");
@@ -1026,7 +1026,7 @@ class DocumentImpl extends NodeImpl {
 
   createTextNode(data) {
     // The wrapper is created lazily; see Text-impl.js.
-    return new TextImpl(this._globalObject, [], { ownerDocument: this, data });
+    return Text.createImpl(this._globalObject, [], { ownerDocument: this, data });
   }
 
   createComment(data) {
@@ -1098,7 +1098,7 @@ class DocumentImpl extends NodeImpl {
     namespacePrefix
   }) {
     // The wrapper is created lazily; see Attr-impl.js.
-    return new AttrImpl(this._globalObject, [], {
+    return Attr.createImpl(this._globalObject, [], {
       localName,
       value,
       namespace,

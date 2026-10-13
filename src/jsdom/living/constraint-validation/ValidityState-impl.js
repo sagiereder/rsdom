@@ -4,6 +4,7 @@ exports.implementation = class ValidityStateImpl {
   constructor(globalObject, args, privateData) {
     const { element, state = {} } = privateData;
 
+    this._globalObject = globalObject;
     this._element = element;
     this._state = state;
   }
