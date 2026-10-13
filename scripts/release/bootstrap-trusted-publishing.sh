@@ -31,6 +31,19 @@ JSON
   if $NPM trust list "$name" 2>/dev/null | grep -q "$REPO"; then
     echo "$name already trusts $REPO"
   else
-    run $NPM trust github "$name" --repo "$REPO" --file "$WORKFLOW" --allow-publish --yes
+    # `npm trust list` can fail without 2FA, so a package that already trusts the workflow can land here; npm answers
+    # that with a 409, which isn't an error for this script.
+    # stderr is copied to a file rather than captured, so npm's 2FA prompts still show.
+    err=$(mktemp)
+    if ! run $NPM trust github "$name" --repo "$REPO" --file "$WORKFLOW" --allow-publish --yes 2> >(tee "$err" >&2); then
+      sleep 1 # let tee finish writing
+      if grep -q "E409" "$err"; then
+        echo "$name already has a trusted publisher"
+      else
+        rm -f "$err"
+        exit 1
+      fi
+    fi
+    rm -f "$err"
   fi
 done
