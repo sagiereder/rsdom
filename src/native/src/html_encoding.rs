@@ -1,9 +1,10 @@
 //! Decoding HTML bytes for jsdom: encoding sniffing and decoding (with encoding_rs), so that bytes go to the native
-//! HTML parser without first becoming a JS string.
+//! HTML parser without first becoming a JS string. XML bytes are sniffed here too.
 //!
-//! The sniffing is a port of html-encoding-sniffer (what jsdom uses), quirks included, so both give
-//! the same `document.characterSet`: https://html.spec.whatwg.org/multipage/parsing.html#encoding-sniffing-algorithm
-//! (BOM, then the transport-layer label, then the prescan; the caller supplies the default). Decoding follows
+//! The sniffing is a port of html-encoding-sniffer (which jsdom used), quirks included, so both give the same
+//! `document.characterSet` (tests/differential/encoding-sniffer.js compares them). For HTML:
+//! https://html.spec.whatwg.org/multipage/parsing.html#encoding-sniffing-algorithm (BOM, then the transport-layer
+//! label, then the prescan; the caller supplies the default). For XML, see sniff_xml_encoding(). Decoding follows
 //! https://encoding.spec.whatwg.org/#decode (a BOM overrides the given encoding and is stripped), like
 //! @exodus/bytes's legacyHookDecode.
 
@@ -337,6 +338,29 @@ pub fn sniff_html_encoding(bytes: Uint8ArraySlice, transport_label: Option<Strin
   bom_encoding(b)
     .or_else(|| transport_label.and_then(|label| Encoding::for_label(label.as_bytes())))
     .or_else(|| prescan(b))
+    .map(Encoding::name)
+}
+
+/// Sniffs the encoding of an XML byte stream, as html-encoding-sniffer's XML mode does (following WebKit until
+/// https://github.com/whatwg/html/issues/12968 is resolved): the BOM, then the transport-layer encoding label (if it is
+/// a valid label), then, once there are at least eight bytes, the UTF-16 `<?x` signatures or the XML declaration.
+/// Returns the encoding's name, or null if the caller's default applies.
+#[napi]
+pub fn sniff_xml_encoding(bytes: Uint8ArraySlice, transport_label: Option<String>) -> Option<&'static str> {
+  let b: &[u8] = &bytes;
+  bom_encoding(b)
+    .or_else(|| transport_label.and_then(|label| Encoding::for_label(label.as_bytes())))
+    .or_else(|| {
+      if b.len() < 8 {
+        None
+      } else if b.starts_with(b"<\0?\0x\0") {
+        Some(encoding_rs::UTF_16LE)
+      } else if b.starts_with(b"\0<\0?\0x") {
+        Some(encoding_rs::UTF_16BE)
+      } else {
+        xml_declaration_encoding(b)
+      }
+    })
     .map(Encoding::name)
 }
 

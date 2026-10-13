@@ -7,3 +7,9 @@ const native = require("../../native");
 exports.sniffHTMLEncoding = (bytes, { transportLayerEncodingLabel, defaultEncoding = "windows-1252" }) => {
   return native.sniffHtmlEncoding(bytes, transportLayerEncodingLabel) ?? defaultEncoding;
 };
+
+// Sniffing for XML bytes, as html-encoding-sniffer's XML mode (which follows WebKit): the BOM, then the transport-layer
+// encoding label, then the UTF-16 `<?x` signatures or the XML declaration, then `defaultEncoding`.
+exports.sniffXMLEncoding = (bytes, { transportLayerEncodingLabel, defaultEncoding = "UTF-8" }) => {
+  return native.sniffXmlEncoding(bytes, transportLayerEncodingLabel) ?? defaultEncoding;
+};

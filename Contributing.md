@@ -15,7 +15,7 @@ rsdom is a fork of jsdom 30.1.2 that makes it faster without changing behaviour.
 
 1. `npm install`, `npm run prepare`, `node src/native/build.js`.
 2. Make your change. Any native fast path must have a JS equivalent that behaves identically.
-3. Run `node scripts/dev/test.js` for the tests relevant to your change, then `node scripts/dev/test.js --all` with and without `JSDOM_NATIVE=wasm` before you submit, and `npm run test:differential` if you change the HTML parser. Run `npm run lint` as well.
+3. Run `node scripts/dev/test.js` for the tests relevant to your change, then `node scripts/dev/test.js --all` with and without `JSDOM_NATIVE=wasm` before you submit, and `npm run test:differential` if you change the HTML parser or encoding sniffing. Run `npm run lint` as well.
 4. For performance work, run `node bench/run.js` (or `--filter <area>`) before and after, and include the numbers.
 
 ## Publishing

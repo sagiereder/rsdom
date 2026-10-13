@@ -11,7 +11,7 @@ The quickest way to run them is the sharded runner:
 node scripts/dev/test.js            # tests relevant to your changes
 node scripts/dev/test.js --all      # everything
 JSDOM_NATIVE=wasm node scripts/dev/test.js --all   # with the WebAssembly build of the Rust core
-npm run test:differential           # the HTML parser against parse5 (see differential/html-parser.js)
+npm run test:differential           # the HTML parser against parse5, encoding sniffing against html-encoding-sniffer (see differential/)
 ```
 
 The npm scripts (`npm run test:api`, `test:wpt`, `test:tuwpt`, `test:to-port-to-wpts`) also work and accept `--fgrep` and `--reporter min`.

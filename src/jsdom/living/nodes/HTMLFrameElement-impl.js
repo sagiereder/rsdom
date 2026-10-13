@@ -2,14 +2,13 @@
 
 const { legacyHookDecode } = require("@exodus/bytes/encoding.js");
 const { parseURL, serializeURL } = require("whatwg-url");
-const sniffHTMLEncoding = require("html-encoding-sniffer");
 const { computedMIMEType } = require("whatwg-mimetype");
 
 const window = require("../../browser/Window");
 const HTMLElementImpl = require("./HTMLElement-impl").implementation;
 const { evaluateJavaScriptURL } = require("../window/navigation");
 const { parseIntoDocument, parseHTMLBytesIntoDocument } = require("../../browser/parser");
-const { sniffHTMLEncoding: sniffHTMLBytesEncoding } = require("../../browser/parser/html-encoding");
+const { sniffHTMLEncoding, sniffXMLEncoding } = require("../../browser/parser/html-encoding");
 const { fireAnEvent } = require("../helpers/events");
 const { getAttributeValue } = require("../attributes");
 
@@ -52,9 +51,9 @@ function fetchFrame(serializedURL, frame, document, contentDoc) {
     // half-assed implementation of
     // https://html.spec.whatwg.org/multipage/parsing.html#determining-the-character-encoding step 6
     if (xml) {
-      contentDoc._encoding = sniffHTMLEncoding(data, { xml, transportLayerEncodingLabel, defaultEncoding: "UTF-8" });
+      contentDoc._encoding = sniffXMLEncoding(data, { transportLayerEncodingLabel, defaultEncoding: "UTF-8" });
     } else {
-      contentDoc._encoding = sniffHTMLBytesEncoding(data, {
+      contentDoc._encoding = sniffHTMLEncoding(data, {
         transportLayerEncodingLabel,
         defaultEncoding: document._encoding
       });

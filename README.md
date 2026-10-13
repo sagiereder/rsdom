@@ -11,7 +11,7 @@ jsdom is the DOM behind most JavaScript test runners (Jest, Vitest and Testing L
 ## How it works
 
 - **Native HTML parsing.** HTML is parsed by [html5ever](https://github.com/servo/html5ever), which is vendored and patched for exact parse5 parity, inside a napi-rs addon (`src/native/`). The addon emits a compact instruction stream. JavaScript (`src/jsdom/browser/parser/html-native.js`) replays that stream to build ordinary jsdom nodes, so the resulting tree is the same object model jsdom always had.
-- **Native or WebAssembly, no JS parser fallback.** The Rust core loads as a native Node-API addon where a prebuilt binary exists, and otherwise as a WebAssembly build of the same crate (`@rsdom/core-wasm32-wasi`), which runs anywhere. If neither loads, `require("@rsdom/core")` throws an error that lists what it tried. parse5 is only a development dependency: the differential tests (`tests/differential/`) check that rsdom's parser builds the same trees, with the same source locations, as parse5. `JSDOM_NATIVE=native` or `JSDOM_NATIVE=wasm` forces one build. The test suite passes with both.
+- **Native or WebAssembly, no JS parser fallback.** The Rust core loads as a native Node-API addon where a prebuilt binary exists, and otherwise as a WebAssembly build of the same crate (`@rsdom/core-wasm32-wasi`), which runs anywhere. If neither loads, `require("@rsdom/core")` throws an error that lists what it tried. parse5 is only a development dependency: the differential tests (`tests/differential/`) check that rsdom's parser builds the same trees, with the same source locations, as parse5, and that its encoding sniffing matches html-encoding-sniffer, which is also a development dependency only. `JSDOM_NATIVE=native` or `JSDOM_NATIVE=wasm` forces one build. The test suite passes with both.
 - **Fast selector engine.** `querySelector(All)`, `matches` and `closest` use a compiled, cached selector matcher (`src/jsdom/living/helpers/selectors/`) that supports `:has()`, falling back to the general engine only for rare cases.
 - **CSS cascade caches.** Parsed stylesheet ASTs, declaration blocks and media query results are cached, so `getComputedStyle` no longer re-parses and re-matches every rule on every call.
 - **Incremental live collections.** `getElementsBy*`, `children` and similar live `HTMLCollection`s are invalidated by a mutation journal and updated incrementally instead of being rebuilt after every DOM change. ID lookups go through a cache.
@@ -97,7 +97,7 @@ node scripts/dev/test.js --all      # the whole suite, sharded across CPUs
 node scripts/dev/test.js --wpt dom/nodes,html/syntax
 node scripts/dev/test.js --api
 JSDOM_NATIVE=wasm node scripts/dev/test.js --all   # with the WebAssembly build
-npm run test:differential           # rsdom's HTML parser against parse5 (RSDOM_FUZZ_COUNT=N for more fuzzing)
+npm run test:differential           # the HTML parser against parse5 and encoding sniffing against html-encoding-sniffer (RSDOM_FUZZ_COUNT=N for more fuzzing)
 ```
 
 The upstream npm scripts (`npm run test:api`, `test:wpt`, `test:tuwpt`, `test:to-port-to-wpts`) still work. See [tests/README.md](tests/README.md).

@@ -4,7 +4,6 @@ const path = require("node:path");
 const { pathToFileURL } = require("node:url");
 const vm = require("node:vm");
 const toughCookie = require("tough-cookie");
-const sniffHTMLEncoding = require("html-encoding-sniffer");
 const whatwgURL = require("whatwg-url");
 const { legacyHookDecode } = require("@exodus/bytes/encoding.js");
 const { URL } = require("whatwg-url");
@@ -14,7 +13,7 @@ const idlUtils = require("./generated/idl/utils.js");
 const VirtualConsole = require("./jsdom/virtual-console.js");
 const { createWindow } = require("./jsdom/browser/Window.js");
 const { parseIntoDocument, parseHTMLBytesIntoDocument } = require("./jsdom/browser/parser");
-const { sniffHTMLEncoding: sniffHTMLBytesEncoding } = require("./jsdom/browser/parser/html-encoding.js");
+const { sniffHTMLEncoding, sniffXMLEncoding } = require("./jsdom/browser/parser/html-encoding.js");
 const { fragmentSerialization } = require("./jsdom/living/domparsing/serialization.js");
 const createDecompressInterceptor = require("./jsdom/browser/resources/decompress-interceptor.js");
 const {
@@ -293,10 +292,10 @@ function normalizeHTML(html, mimeType, hasBeforeParse) {
   if (html instanceof Uint8Array) {
     const transportLayerEncodingLabel = mimeType.parameters.get("charset");
     if (mimeType.isXML()) {
-      encoding = sniffHTMLEncoding(html, { xml: true, transportLayerEncodingLabel });
+      encoding = sniffXMLEncoding(html, { transportLayerEncodingLabel });
       html = legacyHookDecode(html, encoding);
     } else {
-      encoding = sniffHTMLBytesEncoding(html, { transportLayerEncodingLabel });
+      encoding = sniffHTMLEncoding(html, { transportLayerEncodingLabel });
       if (hasBeforeParse) {
         // The bytes are decoded after beforeParse runs, so they must not be the caller's, which it could modify.
         html = html.slice();
