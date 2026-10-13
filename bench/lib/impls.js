@@ -11,14 +11,17 @@ function happyDomVersion() {
   }
 }
 
-// impl name -> { desc, env, kind, modulePath() }.
+// impl name -> { desc, env, kind, modulePath() }. The fork is measured with its native addon only
+// (JSDOM_NATIVE=native, so that a missing addon fails instead of silently measuring the WebAssembly build, which is a
+// fallback and not benchmarked).
 // kind selects the adapter in createDomFactory(): "jsdom" (JSDOM API) or "happy-dom" (Window API).
 const IMPLS = {
   "upstream": {
     desc: "jsdom@30.1.2 from npm", env: {}, kind: "jsdom", modulePath: () => require.resolve("jsdom-upstream")
   },
   "fork": {
-    desc: "this repo (native enabled)", env: {}, kind: "jsdom", modulePath: () => path.join(REPO_ROOT, "src/api.js")
+    desc: "this repo (native addon)", env: { JSDOM_NATIVE: "native" }, kind: "jsdom",
+    modulePath: () => path.join(REPO_ROOT, "src/api.js")
   },
   "happy-dom": {
     get desc() {

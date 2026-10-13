@@ -10,7 +10,8 @@ The quickest way to run them is the sharded runner:
 ```sh
 node scripts/dev/test.js            # tests relevant to your changes
 node scripts/dev/test.js --all      # everything
-JSDOM_NATIVE=0 node scripts/dev/test.js --all   # pure-JS fallback
+JSDOM_NATIVE=wasm node scripts/dev/test.js --all   # with the WebAssembly build of the Rust core
+npm run test:differential           # the HTML parser against parse5 (see differential/html-parser.js)
 ```
 
 The npm scripts (`npm run test:api`, `test:wpt`, `test:tuwpt`, `test:to-port-to-wpts`) also work and accept `--fgrep` and `--reporter min`.

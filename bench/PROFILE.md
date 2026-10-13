@@ -7,12 +7,14 @@ This file sets the performance targets for moving jsdom hot paths to Rust. It co
 - the CPU hotspots for each scenario group
 - a ranked list of what should move to Rust and what should be fixed in JS
 
+The measurements below are historical. They include a `fork-js` implementation (the fork with `JSDOM_NATIVE=0`, then a pure-JS mode using parse5), which no longer exists: rsdom now always uses its Rust core.
+
 ## How to run
 
 ```sh
 source .devshim/env.sh
 cd bench && npm install          # once
-node run.js                         # upstream vs fork vs happy-dom
+node run.js                         # upstream vs fork (native addon) vs happy-dom
 node run.js --mode upstream         # upstream vs fork
 node run.js --mode happy            # happy-dom vs fork
 node run.js --filter react --quick  # subset, 1 warmup + 3 iterations

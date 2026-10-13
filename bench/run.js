@@ -70,9 +70,11 @@ function runPair(impl, scenario, opts) {
     "--impl", impl, "--scenario", scenario.name,
     "--warmup", String(opts.warmup), "--iters", String(opts.iters), "--budget-ms", String(opts.budgetMs)
   ];
-  // rsdom is always measured with its native addon; a JSDOM_NATIVE inherited from the shell must not switch it off.
-  const env = { ...process.env, ...IMPLS[impl].env };
+  // rsdom is always measured with its native addon (see lib/impls.js); a JSDOM_NATIVE inherited from the shell must
+  // not switch it to the WebAssembly build.
+  const env = { ...process.env };
   delete env.JSDOM_NATIVE;
+  Object.assign(env, IMPLS[impl].env);
   const r = spawnSync(process.execPath, workerArgs, {
     cwd: __dirname, env, encoding: "utf8", maxBuffer: 64 * 1024 * 1024
   });

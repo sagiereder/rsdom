@@ -192,10 +192,9 @@ function main() {
   fs.mkdirSync(profDir, { recursive: true });
   const raw = path.join(profDir, `${scenario.name.replace(/\//gu, "_")}.${impl}.json`);
 
-  const env = { ...process.env, ...IMPLS[impl].env };
-  if (!IMPLS[impl].env.JSDOM_NATIVE) {
-    delete env.JSDOM_NATIVE;
-  }
+  const env = { ...process.env };
+  delete env.JSDOM_NATIVE;
+  Object.assign(env, IMPLS[impl].env);
   const r = spawnSync(process.execPath, [
     "--expose-gc", path.join(__dirname, "worker.js"), "--impl", impl, "--scenario", scenario.name,
     "--warmup", String(args.warmup ?? 2), "--iters", String(args.iters ?? 5), "--budget-ms", "600000",
