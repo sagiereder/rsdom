@@ -166,9 +166,24 @@ function matchIndexEntry(index, entry, elementImpl, ctx, mediaResults) {
     return styleIndex.matchAnyComplex(entry.complexes, elementImpl, ctx) ? styleIndex.getSpecificity(entry) : null;
   }
   if (entry.kind === styleIndex.PREFILTER) {
-    return styleIndex.matchAnyComplex(entry.complexes, elementImpl, ctx) ?
-      matchRuleSpecificity(entry.rule, elementImpl) :
-      null;
+    ctx.focusRejected = false;
+    if (styleIndex.matchAnyComplex(entry.complexes, elementImpl, ctx)) {
+      return matchRuleSpecificity(entry.rule, elementImpl);
+    }
+    if (ctx.focusRejected) {
+      // The compiled matchers know the element matches no :focus or :focus-visible, where they used to only check that
+      // it is the active element and leave the rest to dom-selector. Creating dom-selector's DOMSelector starts the
+      // tracking of events it uses for :focus-visible, so when the selector would have been checked with it, start
+      // that tracking now, as if it had been created.
+      ctx.coarseFocus = true;
+      const wouldHaveChecked = styleIndex.matchAnyComplex(entry.complexes, elementImpl, ctx);
+      ctx.coarseFocus = false;
+      const subjects = entry.rule._selectorSubjects;
+      if (wouldHaveChecked && (!subjects || subjectsMightMatch(subjects, elementImpl))) {
+        elementImpl._ownerDocument._trackDOMSelectorEvents();
+      }
+    }
+    return null;
   }
   return matchRuleSpecificity(entry.rule, elementImpl);
 }
@@ -374,7 +389,10 @@ function ruleMightMatchElement(ruleImpl, elementImpl) {
       );
   }
 
-  const subjects = ruleImpl._selectorSubjects;
+  return subjectsMightMatch(ruleImpl._selectorSubjects, elementImpl);
+}
+
+function subjectsMightMatch(subjects, elementImpl) {
   if (subjects.length === 0) {
     return true;
   }

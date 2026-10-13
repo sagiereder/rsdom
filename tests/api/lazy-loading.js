@@ -18,9 +18,12 @@ function modulesLoadedBy(body) {
   return JSON.parse(result.stdout);
 }
 
-function isUndici(file) {
-  return file.includes(`${path.sep}node_modules${path.sep}undici${path.sep}`);
+function isInPackage(name) {
+  const dir = `${path.sep}node_modules${path.sep}${name.split("/").join(path.sep)}${path.sep}`;
+  return file => file.includes(dir);
 }
+
+const isUndici = isInPackage("undici");
 
 describe("lazy loading", () => {
   it("does not load undici for a document that never fetches anything", () => {
@@ -39,5 +42,17 @@ describe("lazy loading", () => {
       dom.window._settings.dispatcher;
     `);
     assert.ok(loaded.some(isUndici));
+  });
+});
+
+describe("lazy loading of CSS dependencies", () => {
+  it("does not load dom-selector for getComputedStyle()", { timeout: 10000 }, () => {
+    const loaded = modulesLoadedBy(`
+      const dom = new JSDOM("<!doctype html><style>p:focus { color: red; }</style><p>hi</p>");
+      const { window } = dom;
+      window.getComputedStyle(window.document.body).display;
+      window.getComputedStyle(window.document.querySelector("p")).color;
+    `);
+    assert.deepEqual(loaded.filter(isInPackage("@asamuzakjp/dom-selector")), []);
   });
 });

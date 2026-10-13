@@ -22,6 +22,8 @@ const CSSImportRule = require("../../../../generated/idl/CSSImportRule.js");
 const CSSMediaRule = require("../../../../generated/idl/CSSMediaRule.js");
 const CSSStyleRule = require("../../../../generated/idl/CSSStyleRule.js");
 const csstree = require("./patched-csstree.js");
+const { wrapperForImpl } = require("../../../../generated/idl/utils.js");
+const { hasAttributeByName } = require("../../attributes.js");
 
 const HTML_NS = "http://www.w3.org/1999/xhtml";
 const DOCUMENT_NODE = 9;
@@ -431,7 +433,15 @@ function matchPseudo(pseudo, element, ctx) {
       if (ctx.activeElement === undefined) {
         ctx.activeElement = element._ownerDocument.activeElement;
       }
-      return element === ctx.activeElement;
+      if (element !== ctx.activeElement) {
+        return false;
+      }
+      if (!ctx.coarseFocus && isCertainlyNotFocusableArea(element)) {
+        // E.g. the body, which is the active element when nothing is focused.
+        ctx.focusRejected = true;
+        return false;
+      }
+      return true;
     case "unknown":
       return true;
     case "root": {
@@ -446,6 +456,31 @@ function matchPseudo(pseudo, element, ctx) {
     default:
       return false;
   }
+}
+
+// dom-selector matches :focus and :focus-visible only for the active element, and only if it is a "focusable area" (its
+// isFocusableArea()), except that :focus also matches a shadow host whose shadow root has an active element. Returns
+// true when that is certainly not the case, so that matching the element against such a selector doesn't need
+// dom-selector. For the HTML elements the fast path handles, isFocusableArea() is only true for elements with a
+// tabindex attribute, editable elements, and elements with one of these local names (and more conditions):
+const POSSIBLY_FOCUSABLE_LOCAL_NAMES = new Set(["a", "iframe", "input", "summary", "button", "select", "textarea"]);
+
+function isCertainlyNotFocusableArea(element) {
+  if (POSSIBLY_FOCUSABLE_LOCAL_NAMES.has(element._localName) || element._shadowRoot !== null ||
+      hasAttributeByName(element, "tabindex")) {
+    return false;
+  }
+  // dom-selector's isContentEditable() reads the element's isContentEditable property and the document's designMode
+  // property, which jsdom doesn't implement but a page could define, and else looks for contenteditable attributes.
+  if ("isContentEditable" in wrapperForImpl(element) || "designMode" in wrapperForImpl(element._ownerDocument)) {
+    return false;
+  }
+  for (let node = element; node !== null && node.nodeType === ELEMENT_NODE; node = node.parentNode) {
+    if (hasAttributeByName(node, "contenteditable")) {
+      return false;
+    }
+  }
+  return true;
 }
 
 function hasSiblingOfType(element, step) {

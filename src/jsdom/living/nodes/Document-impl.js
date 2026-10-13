@@ -51,6 +51,7 @@ const ShadowRoot = require("../../../generated/idl/ShadowRoot");
 const Range = require("../../../generated/idl/Range");
 const documents = require("../documents.js");
 const fastPathFlags = require("../helpers/fast-path-flags");
+const { EventRecorder, createDOMSelector } = require("../helpers/selectors/dom-selector-events");
 
 const BeforeUnloadEvent = require("../../../generated/idl/BeforeUnloadEvent");
 const CompositionEvent = require("../../../generated/idl/CompositionEvent");
@@ -151,6 +152,7 @@ const eventInterfaceTable = {
 
 class DocumentImpl extends NodeImpl {
   #domSelector = null;
+  #domSelectorEventRecorder = null;
   #styleCache = null;
   #displayCache = null;
   #lastFocusedElement = null;
@@ -301,14 +303,19 @@ class DocumentImpl extends NodeImpl {
   // The `DOMSelector` instance is lazily created, as it is somewhat expensive to create and not always needed.
   _getDOMSelector() {
     if (!this.#domSelector) {
-      // Required here rather than at the top: loading the selector engine takes tens of milliseconds, a cost every
-      // process (e.g. every Vitest test file) would otherwise pay up front even if nothing ever needs it.
-      const { DOMSelector } = require("@asamuzakjp/dom-selector");
-      this.#domSelector = new DOMSelector(this._globalObject, this._ownerDocument, {
-        idlUtils
-      });
+      const recorder = this.#domSelectorEventRecorder;
+      this.#domSelector = createDOMSelector(this._globalObject, this._ownerDocument, idlUtils, recorder);
+      this.#domSelectorEventRecorder = null;
     }
     return this.#domSelector;
+  }
+
+  // Called where the `DOMSelector` would have been created, but isn't needed: starts tracking the events it tracks from
+  // its creation on (see dom-selector-events.js).
+  _trackDOMSelectorEvents() {
+    if (!this.#domSelector && !this.#domSelectorEventRecorder) {
+      this.#domSelectorEventRecorder = new EventRecorder(this._globalObject);
+    }
   }
 
   _clearDOMSelector() {
