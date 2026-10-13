@@ -85,6 +85,84 @@ describe("API: window creation", () => {
         }
       });
 
+      it("should give interface objects and prototypes the shape Web IDL specifies", () => {
+        const { window } = new JSDOM(``, options);
+
+        // Constructible (EventTarget, Event, Document, HTMLDivElement) and non-constructible (Node, Element,
+        // CharacterData, CSSStyleProperties) interfaces, with and without an inherited interface.
+        const names = [
+          "EventTarget", "Event", "Document", "HTMLDivElement", "Node", "Element", "CharacterData",
+          "CSSStyleProperties"
+        ];
+        for (const name of names) {
+          const I = window[name];
+          assert.equal(I.name, name);
+          assert.deepEqual(Object.getOwnPropertyNames(I).slice(0, 3), ["length", "name", "prototype"], name);
+          assert.deepEqual(
+            Object.getOwnPropertyDescriptor(I, "prototype"),
+            { value: I.prototype, writable: false, enumerable: false, configurable: false },
+            name
+          );
+          assert.deepEqual(
+            Object.getOwnPropertyDescriptor(I.prototype, "constructor"),
+            { value: I, writable: true, enumerable: false, configurable: true },
+            name
+          );
+          assert.equal(Object.getOwnPropertyNames(I.prototype)[0], "constructor", name);
+          assert.deepEqual(
+            Object.getOwnPropertyDescriptor(I.prototype, Symbol.toStringTag),
+            { value: name, writable: false, enumerable: false, configurable: true },
+            name
+          );
+          assert.throws(() => I(), err => { // eslint-disable-line new-cap
+            assert.equal(err.name, "TypeError");
+            assert.equal(err.message, `Class constructor ${name} cannot be invoked without 'new'`);
+            return true;
+          }, name);
+        }
+
+        for (const name of ["Node", "Element", "CharacterData", "CSSStyleProperties"]) {
+          assert.equal(window[name].length, 0, name);
+          assert.throws(() => new window[name](), window.TypeError, name);
+        }
+        assert.equal(Object.getPrototypeOf(window.Node), window.EventTarget);
+        assert.equal(Object.getPrototypeOf(window.Node.prototype), window.EventTarget.prototype);
+        assert.equal(Object.getPrototypeOf(window.Element), window.Node);
+        assert.equal(Object.getPrototypeOf(window.Element.prototype), window.Node.prototype);
+        assert.equal(Object.getPrototypeOf(window.CSSStyleProperties.prototype), window.CSSStyleDeclaration.prototype);
+        assert.ok(new window.Event("x") instanceof window.Event);
+
+        // Members are enumerable, in the order of the IDL; operations are not constructors.
+        assert.deepEqual(
+          Object.getOwnPropertyNames(window.Node.prototype).slice(0, 6),
+          ["constructor", "getRootNode", "hasChildNodes", "normalize", "cloneNode", "isEqualNode"]
+        );
+        const getter = Object.getOwnPropertyDescriptor(window.Node.prototype, "nodeType");
+        assert.equal(getter.enumerable, true);
+        assert.equal(getter.configurable, true);
+        assert.equal(getter.get.name, "get nodeType");
+        assert.equal(getter.set, undefined);
+        const method = Object.getOwnPropertyDescriptor(window.Node.prototype, "appendChild");
+        assert.equal(method.enumerable, true);
+        assert.equal(method.writable, true);
+        assert.equal(method.value.length, 1);
+        assert.equal(Object.hasOwn(method.value, "prototype"), false);
+        assert.throws(() => new method.value(), TypeError); // eslint-disable-line new-cap
+        const property = Object.getOwnPropertyDescriptor(window.CSSStyleProperties.prototype, "backgroundColor");
+        assert.equal(property.enumerable, true);
+        assert.equal(property.set.name, "set backgroundColor");
+
+        // Constants are on both the interface object and the prototype, after the other members.
+        for (const object of [window.Node, window.Node.prototype]) {
+          assert.deepEqual(
+            Object.getOwnPropertyDescriptor(object, "ELEMENT_NODE"),
+            { value: 1, writable: false, enumerable: true, configurable: false }
+          );
+        }
+        const nodeKeys = Object.keys(window.Node.prototype);
+        assert.equal(nodeKeys.indexOf("ELEMENT_NODE"), nodeKeys.length - 18);
+      });
+
       it("should keep creating correct wrappers after an interface object is deleted or replaced", () => {
         const { window } = new JSDOM(``, options);
         const { HTMLDivElement, HTMLSpanElement } = window;

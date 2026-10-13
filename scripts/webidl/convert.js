@@ -320,6 +320,13 @@ function wrapperForImpl(impl) {
   return wrapper ?? null;
 }`;
 
+// The property descriptor install() uses to make class members enumerable; see postProcessInterfaceObject(). It has a
+// null prototype, so that properties added to Object.prototype cannot change what it describes.
+const ENUMERABLE_DESCRIPTOR_ORIGINAL = `const call = Function.call.bind(Function.call);`;
+const ENUMERABLE_DESCRIPTOR_REPLACEMENT = `${ENUMERABLE_DESCRIPTOR_ORIGINAL}
+
+const enumerableDescriptor = Object.freeze({ __proto__: null, enumerable: true });`;
+
 function postProcessUtils() {
   const utilsPath = path.resolve(outputDir, "utils.js");
   let source = fs.readFileSync(utilsPath, "utf8");
@@ -332,7 +339,9 @@ function postProcessUtils() {
     [NEW_OBJECT_ORIGINAL, NEW_OBJECT_REPLACEMENT],
     [WRAPPER_FOR_IMPL_ORIGINAL, WRAPPER_FOR_IMPL_REPLACEMENT],
     ["  wrapperForImpl,\n", "  wrapperForImpl,\n  lazyWrapper,\n"],
-    ["  getSameObject,\n", "  getSameObject,\n  cachedSameObject,\n  cacheSameObject,\n"]
+    ["  getSameObject,\n", "  getSameObject,\n  cachedSameObject,\n  cacheSameObject,\n"],
+    [ENUMERABLE_DESCRIPTOR_ORIGINAL, ENUMERABLE_DESCRIPTOR_REPLACEMENT],
+    ["  newObjectInRealm,\n", "  newObjectInRealm,\n  enumerableDescriptor,\n"]
   ]) {
     if (!source.includes(original)) {
       throw new Error(`convert.js: could not post-process generated utils.js: ${original.split("\n")[0]} not found`);
@@ -837,29 +846,55 @@ function postProcessUniformAccessors(file) {
   fs.writeFileSync(file, output.slice(0, requireImplEnd) + CE_STRING_HELPERS + output.slice(requireImplEnd));
 }
 
-// Interface objects of interfaces without a constructor operation are plain functions with an object-literal
-// prototype, instead of a class whose members webidl2js then makes enumerable one by one with
-// Object.defineProperties(): accessors and methods defined in an object literal are enumerable already, which makes
-// installing the interfaces into every new window much cheaper (CSSStyleProperties alone has over 3000 accessors).
-// The installed interface object and prototype have the same own properties, in the same order, with the same
-// attributes as the class version. Calling the interface object throws the same errors as the class did: with new, the
-// "Illegal constructor" TypeError of the window's realm; without, the TypeError (from Node's realm, like the interface
-// object itself) with the message V8 gives when a class is called without new.
-const ILLEGAL_CONSTRUCTOR = `    constructor() {
-      throw new globalObject.TypeError("Illegal constructor");
-    }
-`;
+// Every new window gets its own interface objects and interface prototype objects, so how install() builds them is paid
+// once per window, for every interface. webidl2js emits each interface object as a class, whose members it then makes
+// enumerable with an Object.defineProperties() call taking a descriptor object per member. In a new window each of
+// these objects is new, so V8 builds a new chain of hidden classes, one per property definition, for each of them.
+// Instead:
+//
+// - Interface objects of interfaces without a constructor operation (whose constructor throws "Illegal constructor")
+//   are plain functions. Their prototype is an object literal created with a null prototype, which V8 makes in
+//   dictionary mode directly, and then given its actual prototype. Accessors and methods defined in an object literal
+//   are enumerable already. Calling the function throws the same errors as the class did: with new, the "Illegal
+//   constructor" TypeError of the window's realm; without, the TypeError (from Node's realm, like the interface object
+//   itself) with the message V8 gives when a class is called without new.
+// - Interfaces with a constructor operation stay classes, whose construction semantics a function cannot match exactly
+//   (a derived class constructor does not read new.target.prototype before its body runs). Their members are made
+//   enumerable with one Object.defineProperty() each, sharing one descriptor, instead of one descriptor object per
+//   member.
+//
+// Either way the installed interface object and prototype have the same own properties, in the same order, with the
+// same attributes as the class version. CSSStyleProperties alone has over 3000 accessors.
+const ILLEGAL_CONSTRUCTOR_BODY = `      throw new globalObject.TypeError("Illegal constructor");\n`;
+const CONSTRUCTOR_HEADER = / {4}constructor\(([\w$, ]*)\) \{\n/uy;
 const MEMBER_HEADER = /^ {4}(?:(?:get|set) )?([A-Za-z_$][\w$]*|"[^"\\]*"|\[Symbol\.[A-Za-z]+\])\(.*\) \{$/u;
+
+function memberKeyExpression(key) {
+  if (key.startsWith("[")) {
+    return key.slice(1, -1);
+  }
+  return key.startsWith("\"") ? key : JSON.stringify(key);
+}
 
 function postProcessInterfaceObject(file) {
   const source = fs.readFileSync(file, "utf8");
   const classMatch = /^ {2}class ([\w$]+)(?: extends ([\w$.]+))? \{\n/mu.exec(source);
-  if (classMatch === null || !source.startsWith(ILLEGAL_CONSTRUCTOR, classMatch.index + classMatch[0].length)) {
+  if (classMatch === null) {
     return;
   }
   const [, name, base] = classMatch;
   const classStart = classMatch.index;
-  const bodyStart = classStart + classMatch[0].length + ILLEGAL_CONSTRUCTOR.length;
+  CONSTRUCTOR_HEADER.lastIndex = classStart + classMatch[0].length;
+  const constructorMatch = CONSTRUCTOR_HEADER.exec(source);
+  if (constructorMatch === null) {
+    return;
+  }
+  const params = constructorMatch[1];
+  const constructorBodyStart = CONSTRUCTOR_HEADER.lastIndex;
+  const constructorEnd = source.indexOf("\n    }\n", constructorBodyStart - 1);
+  const constructorBody = source.slice(constructorBodyStart, constructorEnd + 1);
+  const illegal = params === "" && constructorBody === ILLEGAL_CONSTRUCTOR_BODY;
+  const bodyStart = constructorEnd + "\n    }\n".length;
   const protoDefinitions = `\n  }\n  Object.defineProperties(${name}.prototype, {\n`;
   const bodyEnd = source.indexOf(protoDefinitions, bodyStart - 1);
   const entriesStart = bodyEnd + protoDefinitions.length;
@@ -888,7 +923,8 @@ function postProcessInterfaceObject(file) {
     i = end;
   }
 
-  // Entries that only make a member enumerable are no longer needed; members missing one become non-enumerable.
+  // Entries that only make a member enumerable; the other entries are kept verbatim (they may span lines; a trailing
+  // comma on the last one is harmless).
   const enumerableKeys = new Set();
   const otherEntries = [];
   for (const entry of source.slice(entriesStart, entriesEnd).split("\n")) {
@@ -899,26 +935,61 @@ function postProcessInterfaceObject(file) {
       otherEntries.push(entry);
     }
   }
+  const afterEntries = entriesEnd + "\n  });\n".length;
+
+  if (!illegal) {
+    if (enumerableKeys.size === 0) {
+      return;
+    }
+    const keyList = `const $enumerableMembers = [${[...enumerableKeys].map(memberKeyExpression).join(", ")}];\n\n`;
+    const loop = `  for (const key of $enumerableMembers) {
+    Object.defineProperty(${name}.prototype, key, utils.enumerableDescriptor);
+  }
+`;
+    const rest = otherEntries.length === 0 ?
+      "" :
+      `  Object.defineProperties(${name}.prototype, {\n${otherEntries.join("\n")}\n  });\n`;
+    const installStart = source.indexOf("\nexports.install = ") + 1;
+    fs.writeFileSync(
+      file,
+      source.slice(0, installStart) + keyList + source.slice(installStart, bodyEnd) + "\n  }\n" + loop + rest +
+        source.slice(afterEntries)
+    );
+    return;
+  }
+
+  // Members missing an enumerable entry become non-enumerable.
   const nonEnumerable = ["constructor", ...[...memberKeys].filter(key => !enumerableKeys.has(key))];
-  // Other entries are kept verbatim (they may span lines); a trailing comma on the last one is harmless.
   const entries = [...nonEnumerable.map(key => `    ${key}: { enumerable: false },`), ...otherEntries].join("\n");
 
-  const prototypeMembers = [`${base ? `    __proto__: ${base}.prototype,\n` : ""}    constructor: ${name}`, ...members];
+  const prototypeMembers = [`    __proto__: null,\n    constructor: ${name}`, ...members];
   const replacement = `  const ${name} = function ${name}() {
     if (new.target === undefined) {
       throw new TypeError("Class constructor ${name} cannot be invoked without 'new'");
     }
     throw new globalObject.TypeError("Illegal constructor");
   };
-${base ? `  Object.setPrototypeOf(${name}, ${base});\n` : ""}  const $prototype = {
+  const $prototype = {
 ${prototypeMembers.join(",\n\n")}
   };
+  Object.setPrototypeOf($prototype, ${base ? `${base}.prototype` : "Object.prototype"});
   Object.defineProperty(${name}, "prototype", { value: $prototype, writable: false });
   Object.defineProperties($prototype, {
 ${entries}
   });
 `;
-  fs.writeFileSync(file, source.slice(0, classStart) + replacement + source.slice(entriesEnd + "\n  });\n".length));
+  // The interface object's [[Prototype]] is set last: until then its hidden class, and the transitions to the ones
+  // adding "prototype" and any constants, are shared by all windows.
+  let rest = afterEntries;
+  const constants = `  Object.defineProperties(${name}, {\n`;
+  if (source.startsWith(constants, rest)) {
+    rest = source.indexOf("\n  });\n", rest) + "\n  });\n".length;
+  }
+  const setPrototype = base ? `  Object.setPrototypeOf(${name}, ${base});\n` : "";
+  fs.writeFileSync(
+    file,
+    source.slice(0, classStart) + replacement + source.slice(afterEntries, rest) + setPrototype + source.slice(rest)
+  );
 }
 
 // The next() of a pair iterator (FormData, Headers) recomputed the whole list of value pairs to read the one at the
