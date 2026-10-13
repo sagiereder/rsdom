@@ -91,6 +91,7 @@
     "prepare:generate-event-sets": "wireit",
     "prepare:generate-css-style-properties": "wireit",
     "prepare:generate-js-globals": "wireit",
+    "prepare:generate-css-tree-bundle": "wireit",
     "pretest": "npm run prepare && npm run wpt:init",
     "test": "npm-run-all --continue-on-error test:*",
     "test:api": "mocha tests/api/",
@@ -109,7 +110,8 @@
       "dependencies": [
         "prepare:convert-idl",
         "prepare:generate-event-sets",
-        "prepare:generate-js-globals"
+        "prepare:generate-js-globals",
+        "prepare:generate-css-tree-bundle"
       ]
     },
     "prepare:convert-idl": {
@@ -126,6 +128,9 @@
     },
     "prepare:generate-js-globals": {
       "command": "node ./scripts/generate-js-globals.js"
+    },
+    "prepare:generate-css-tree-bundle": {
+      "command": "node ./scripts/generate-css-tree-bundle.js"
     }
   },
   "files": [

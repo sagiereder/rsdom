@@ -1,4 +1,6 @@
 "use strict";
+const fs = require("node:fs");
+const { createRequire } = require("node:module");
 
 // css-tree, forked with the csstools syntax patches. Loading and forking it takes tens of milliseconds, which every
 // process (e.g. every Vitest test file) would pay up front even if it never parses CSS, so it is done on first use:
@@ -31,7 +33,48 @@ function boundTokenStreamBuffers(TokenStream) {
   };
 }
 
-function load() {
+// css-tree and the patches, from src/generated/css-tree-bundle.js (see scripts/generate-css-tree-bundle.js) if it is
+// there and was built from the installed versions of the packages it contains, otherwise null.
+function loadBundle() {
+  let bundle;
+  try {
+    bundle = require("../../../../generated/css-tree-bundle.js");
+  } catch {
+    return null;
+  }
+  // The package.json path of each bundled package, resolved as its requirer would.
+  const packageJSONPaths = new Map();
+  for (const [name, version, requiredFrom] of bundle.packages) {
+    const requireFrom = requiredFrom === null ? require : createRequire(packageJSONPaths.get(requiredFrom));
+    let packageJSONPath, installed;
+    try {
+      packageJSONPath = requireFrom.resolve(`${name}/package.json`);
+      ({ version: installed } = JSON.parse(fs.readFileSync(packageJSONPath, "utf-8")));
+    } catch {
+      return null;
+    }
+    if (installed !== version) {
+      return null;
+    }
+    packageJSONPaths.set(name, packageJSONPath);
+  }
+  return bundle.load(require);
+}
+
+// Creates the patched syntax, from the bundle's modules if given (loadBundle()), otherwise from the packages.
+function createPatchedSyntax(bundled) {
+  if (bundled !== null) {
+    boundTokenStreamBuffers(bundled.tokenizer.TokenStream);
+    // What forking css-tree's default syntax does (see fork() in css-tree/cjs/syntax/create.cjs), without creating the
+    // default syntax first.
+    const defaultConfig = { ...bundled.lexerConfig, ...bundled.parserConfig, ...bundled.walkerConfig };
+    const forked = bundled.createSyntax(bundled.mix(bundled.mix({}, defaultConfig), bundled.patches.next));
+    forked.string = bundled.string;
+    forked.ident = bundled.ident;
+    forked.definitionSyntax = bundled.definitionSyntax;
+    return forked;
+  }
+
   const { next: syntaxes } = require("@csstools/css-syntax-patches-for-csstree");
   const csstree = require("css-tree");
   boundTokenStreamBuffers(require("css-tree/tokenizer").TokenStream);
@@ -42,6 +85,11 @@ function load() {
   forked.string = csstree.string;
   forked.ident = csstree.ident;
   forked.definitionSyntax = csstree.definitionSyntax;
+  return forked;
+}
+
+function load() {
+  const forked = createPatchedSyntax(loadBundle());
 
   for (const member of MEMBERS) {
     Object.defineProperty(exports, member, {
@@ -63,3 +111,7 @@ for (const member of MEMBERS) {
     configurable: true
   });
 }
+
+// For tests.
+exports._loadBundle = loadBundle;
+exports._createPatchedSyntax = createPatchedSyntax;

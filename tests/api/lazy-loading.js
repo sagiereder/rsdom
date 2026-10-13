@@ -55,4 +55,15 @@ describe("lazy loading of CSS dependencies", () => {
     `);
     assert.deepEqual(loaded.filter(isInPackage("@asamuzakjp/dom-selector")), []);
   });
+
+  it("loads css-tree from the bundle", { timeout: 10000 }, () => {
+    const loaded = modulesLoadedBy(`
+      const dom = new JSDOM("<!doctype html><p style='color: red'>hi</p>");
+      const { window } = dom;
+      window.getComputedStyle(window.document.querySelector("p")).color;
+    `);
+    assert.ok(loaded.some(file => file.endsWith(path.join("generated", "css-tree-bundle.js"))));
+    assert.deepEqual(loaded.filter(isInPackage("css-tree")), []);
+    assert.deepEqual(loaded.filter(isInPackage("mdn-data")), []);
+  });
 });
