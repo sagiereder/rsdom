@@ -5,6 +5,7 @@ const { observeVersion } = require("../helpers/dom-tree");
 
 exports.implementation = class NodeListImpl {
   constructor(globalObject, args, privateData) {
+    this._globalObject = globalObject;
     if (privateData.nodes) {
       // `adoptNodes` means the caller gives up the array, so it need not be copied.
       this._list = privateData.adoptNodes === true ? privateData.nodes : [...privateData.nodes];

@@ -12,7 +12,7 @@ const CDATASection = require("../../../generated/idl/CDATASection");
 const Comment = require("../../../generated/idl/Comment");
 const ProcessingInstruction = require("../../../generated/idl/ProcessingInstruction");
 // Text wrappers are created lazily; see Text-impl.js.
-const TextImpl = require("../../living/nodes/Text-impl").implementation;
+const Text = require("../../../generated/idl/Text");
 
 const attributes = require("../../living/attributes");
 const { HTML_NS } = require("../../living/helpers/namespaces");
@@ -104,7 +104,7 @@ function createParser(rootNode, globalObject, saxesOptions) {
     // node.
     data => {
       const ownerDocument = getOwnerDocument();
-      appendChild(new TextImpl(globalObject, [], { data, ownerDocument }));
+      appendChild(Text.createImpl(globalObject, [], { data, ownerDocument }));
     } :
     // When parsing a whole document, we must ignore those text nodes that are
     // produced outside the root element. Saxes produces events for them,
@@ -112,7 +112,7 @@ function createParser(rootNode, globalObject, saxesOptions) {
     data => {
       if (openStack.length > 1) {
         const ownerDocument = getOwnerDocument();
-        appendChild(new TextImpl(globalObject, [], { data, ownerDocument }));
+        appendChild(Text.createImpl(globalObject, [], { data, ownerDocument }));
       }
     });
 

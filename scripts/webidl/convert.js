@@ -289,6 +289,37 @@ const NEW_OBJECT_REPLACEMENT = `function newObjectInRealm(globalObject, object) 
   return { __proto__: ctorRegistry["%Object.prototype%"], ...object };
 }`;
 
+// Wrappers made on first use. An implementation created through a generated createImpl() can get, instead of its
+// wrapper, a "lazy wrapper": a function that makes, stores and returns the wrapper when wrapperForImpl() first asks
+// for it. Implementations created internally and never exposed to script (nodes from the parser, mutation record node
+// lists, ...) thus never allocate and brand a wrapper. Making the wrapper has no effect script can observe: it is an
+// ordinary object (or proxy) whose prototype is the interface prototype object of the implementation's realm, just
+// as when it is made eagerly. The functions carry a private brand so that wrapperForImpl() tells them from the
+// values callback functions and interfaces store under the same symbol (which can be functions, and proxies), without
+// running any script.
+const WRAPPER_FOR_IMPL_ORIGINAL = `function wrapperForImpl(impl) {
+  return impl?.[wrapperSymbol] ?? null;
+}`;
+const WRAPPER_FOR_IMPL_REPLACEMENT = `class LazyWrapper extends ReturnValue {
+  #lazy;
+
+  static is(value) {
+    return #lazy in value;
+  }
+}
+
+function lazyWrapper(wrap) {
+  return new LazyWrapper(wrap);
+}
+
+function wrapperForImpl(impl) {
+  const wrapper = impl?.[wrapperSymbol];
+  if (typeof wrapper === "function" && LazyWrapper.is(wrapper)) {
+    return wrapper(impl);
+  }
+  return wrapper ?? null;
+}`;
+
 function postProcessUtils() {
   const utilsPath = path.resolve(outputDir, "utils.js");
   let source = fs.readFileSync(utilsPath, "utf8");
@@ -299,6 +330,8 @@ function postProcessUtils() {
     ["  registerWrapper,\n", "  registerWrapper,\n  registerProxyWrapper,\n"],
     [SAME_OBJECT_ORIGINAL, SAME_OBJECT_REPLACEMENT],
     [NEW_OBJECT_ORIGINAL, NEW_OBJECT_REPLACEMENT],
+    [WRAPPER_FOR_IMPL_ORIGINAL, WRAPPER_FOR_IMPL_REPLACEMENT],
+    ["  wrapperForImpl,\n", "  wrapperForImpl,\n  lazyWrapper,\n"],
     ["  getSameObject,\n", "  getSameObject,\n  cachedSameObject,\n  cacheSameObject,\n"]
   ]) {
     if (!source.includes(original)) {
@@ -453,7 +486,8 @@ function postProcessIndexedWrapper(handler, fail) {
   return `${handler.slice(0, at)}
       const indexedValue = impl.item(index);
       if (indexedValue !== null) {
-        return indexedValue[utils.wrapperSymbol] ?? indexedValue;
+        const wrapper = indexedValue[utils.wrapperSymbol];
+        return typeof wrapper === "object" ? wrapper : utils.tryWrapperForImpl(indexedValue);
       }
 ${handler.slice(at + indexed.length)}`;
 }
@@ -935,6 +969,99 @@ function postProcessPairIterator(file) {
   fs.writeFileSync(file, source.replace(PAIR_FOR_EACH_ORIGINAL, PAIR_FOR_EACH_REPLACEMENT));
 }
 
+// createImpl() makes the implementation with a lazy wrapper (see lazyWrapper() in utils.js) in place of its wrapper,
+// which wrapperForImpl() turns into the same wrapper create() would have made. Implementations that need their
+// wrapper at creation (Impl.init uses it) or whose `_globalObject` is not the realm they are created in get it eagerly,
+// as before.
+const CREATE_IMPL_ORIGINAL = `exports.createImpl = (globalObject, constructorArgs, privateData) => {
+  const wrapper = exports.create(globalObject, constructorArgs, privateData);
+  return utils.implForWrapper(wrapper);
+};
+`;
+const CREATE_IMPL_REPLACEMENT = `exports.createImpl = (globalObject, constructorArgs = [], privateData = {}) => {
+  if ($lazyWrapper === null) {
+    return utils.implForWrapper(exports.create(globalObject, constructorArgs, privateData));
+  }
+  const impl = new Impl.implementation(globalObject, constructorArgs, privateData);
+  impl[utils.wrapperSymbol] = impl._globalObject === globalObject ? $lazyWrapper : $wrap(impl, globalObject);
+  return impl;
+};
+`;
+const SETUP_HEAD = `privateData = {}`;
+const SETUP_BODY = `) => {
+  privateData.wrapper = wrapper;
+
+  exports._internalSetup(wrapper, globalObject);
+  const impl = new Impl.implementation(globalObject, constructorArgs, privateData);
+`;
+const SETUP_TAIL = `  impl[utils.wrapperSymbol] = wrapper;
+  if (Impl.init) {
+    Impl.init(impl);
+  }
+  return wrapper;
+};
+`;
+
+function postProcessLazyWrapper(file) {
+  let source = fs.readFileSync(file, "utf8");
+  if (!source.includes("exports.createImpl = ")) {
+    return;
+  }
+  function fail(what) {
+    throw new Error(`convert.js: could not post-process ${path.basename(file)}: ${what} not found`);
+  }
+  if (!source.includes(CREATE_IMPL_ORIGINAL)) {
+    fail("createImpl");
+  }
+  // The wrapper-making steps of setup(), between constructing the implementation and storing the wrapper on it.
+  const headAt = source.indexOf(SETUP_HEAD);
+  const bodyAt = source.indexOf(SETUP_BODY, headAt);
+  if (headAt === -1 || bodyAt === -1 || source.slice(headAt + SETUP_HEAD.length, bodyAt).includes("\n")) {
+    fail("setup");
+  }
+  const stepsAt = bodyAt + SETUP_BODY.length;
+  const tailAt = source.indexOf(SETUP_TAIL, stepsAt);
+  if (tailAt === -1) {
+    fail("setup tail");
+  }
+  // create() passes setup() isOrdinary = true.
+  const steps = source.slice(stepsAt, tailAt).replace(
+    "wrapper = makeProxy(wrapper, impl, globalObject, isOrdinary);",
+    "wrapper = makeProxy(wrapper, impl, globalObject, true);"
+  );
+  const proxyStep = "(\\n {2}wrapper = makeProxy\\(wrapper, impl, globalObject(, true)?\\);\\n)?";
+  const registerStep = "\\n {2}utils\\.register(Proxy)?Wrapper\\(wrapper, impl, \\$interfaceDescriptor\\);\\n";
+  if (!new RegExp(`^${proxyStep}${registerStep}$`, "u").test(steps)) {
+    fail("setup wrapper steps");
+  }
+  // Nothing reads privateData.wrapper.
+  source = source.replaceAll("  privateData.wrapper = wrapper;\n\n", "");
+  source = source.replace(CREATE_IMPL_ORIGINAL, `let $lazyWrapper = null;
+
+function $wrap(impl, globalObject) {
+  ${source.includes("wrapper = makeProxy(") ? "let" : "const"} wrapper = makeWrapper(globalObject);
+  exports._internalSetup(wrapper, globalObject);
+${steps}  return wrapper;
+}
+
+${CREATE_IMPL_REPLACEMENT}`);
+  const implRequire = /\nconst Impl = require\([^\n]*\);\n/u.exec(source);
+  if (implRequire === null) {
+    fail("Impl require");
+  }
+  const at = implRequire.index + implRequire[0].length;
+  source = `${source.slice(0, at)}
+if (!Impl.init) {
+  $lazyWrapper = utils.lazyWrapper(impl => {
+    const wrapper = $wrap(impl, impl._globalObject);
+    impl[utils.wrapperSymbol] = wrapper;
+    return wrapper;
+  });
+}
+${source.slice(at)}`;
+  fs.writeFileSync(file, source);
+}
+
 function postProcessWrappers() {
   for (const name of fs.readdirSync(outputDir)) {
     if (name.endsWith(".js")) {
@@ -946,6 +1073,7 @@ function postProcessWrappers() {
       postProcessPairIterator(file);
       postProcessUniformAccessors(file);
       postProcessInterfaceObject(file);
+      postProcessLazyWrapper(file);
     }
   }
 }
