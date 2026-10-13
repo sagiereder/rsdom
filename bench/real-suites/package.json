@@ -1,0 +1,14 @@
+{
+  "name": "rsdom-real-suites",
+  "private": true,
+  "description": "Runs real open-source Jest/Vitest suites with jsdom, jsdom 30.1.2, rsdom and happy-dom",
+  "scripts": {
+    "setup": "node run.js setup",
+    "bench": "node run.js bench",
+    "profile": "node run.js profile"
+  },
+  "dependencies": {
+    "happy-dom": "20.14.6",
+    "jsdom-upstream": "npm:jsdom@30.1.2"
+  }
+}

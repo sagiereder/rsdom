@@ -1,0 +1,929 @@
+[
+  {
+    "name": "ariakit",
+    "impl": "rsdom",
+    "wallMs": 318444,
+    "breakdown": {
+      "profiles": 254,
+      "cpuMs": 428445,
+      "idleMs": 808758,
+      "categories": [
+        {
+          "name": "React",
+          "ms": 90706,
+          "pct": 21.2
+        },
+        {
+          "name": "DOM",
+          "ms": 79064,
+          "pct": 18.5
+        },
+        {
+          "name": "DOM: loading its own modules (fs + compile)",
+          "ms": 70260,
+          "pct": 16.4
+        },
+        {
+          "name": "project code + other libraries",
+          "ms": 56167,
+          "pct": 13.1
+        },
+        {
+          "name": "node core",
+          "ms": 41740,
+          "pct": 9.7
+        },
+        {
+          "name": "transform/compile",
+          "ms": 34770,
+          "pct": 8.1
+        },
+        {
+          "name": "test runner",
+          "ms": 27891,
+          "pct": 6.5
+        },
+        {
+          "name": "GC",
+          "ms": 17078,
+          "pct": 4
+        },
+        {
+          "name": "Testing Library",
+          "ms": 6619,
+          "pct": 1.5
+        },
+        {
+          "name": "V8/native (unattributed)",
+          "ms": 4120,
+          "pct": 1
+        },
+        {
+          "name": "other",
+          "ms": 31,
+          "pct": 0
+        }
+      ],
+      "domAreas": [
+        {
+          "name": "window setup/teardown",
+          "ms": 37519,
+          "pct": 8.8
+        },
+        {
+          "name": "style/getComputedStyle",
+          "ms": 17620,
+          "pct": 4.1
+        },
+        {
+          "name": "DOM tree ops",
+          "ms": 10569,
+          "pct": 2.5
+        },
+        {
+          "name": "events",
+          "ms": 4814,
+          "pct": 1.1
+        },
+        {
+          "name": "other DOM",
+          "ms": 4599,
+          "pct": 1.1
+        },
+        {
+          "name": "selectors",
+          "ms": 3347,
+          "pct": 0.8
+        },
+        {
+          "name": "mutation observers",
+          "ms": 349,
+          "pct": 0.1
+        },
+        {
+          "name": "parsing/serialization",
+          "ms": 181,
+          "pct": 0
+        },
+        {
+          "name": "accessibility/layout props",
+          "ms": 65,
+          "pct": 0
+        }
+      ],
+      "topDomFunctions": [
+        {
+          "name": "exports.installInterfaces rsdom:living/interfaces.js:256",
+          "ms": 7432,
+          "pct": 1.7
+        },
+        {
+          "name": "qr @asamuzakjp/css-color/dist/esm/index.js:3072",
+          "ms": 2554,
+          "pct": 0.6
+        },
+        {
+          "name": "(anonymous) rsdom:living/css/CSSStyleProperties-impl.js:1",
+          "ms": 1879,
+          "pct": 0.4
+        },
+        {
+          "name": "mix css-tree/cjs/syntax/config/mix.cjs:38",
+          "ms": 986,
+          "pct": 0.2
+        },
+        {
+          "name": "Kt @asamuzakjp/css-color/dist/esm/index.js:1394",
+          "ms": 747,
+          "pct": 0.2
+        },
+        {
+          "name": "visit rsdom:living/css/helpers/css-values.js:164",
+          "ms": 645,
+          "pct": 0.2
+        },
+        {
+          "name": "d lru-cache/dist/esm/node/index.min.js:1",
+          "ms": 542,
+          "pct": 0.1
+        },
+        {
+          "name": "applyIndexedStyleSheetRules rsdom:living/css/helpers/computed-style.js:101",
+          "ms": 530,
+          "pct": 0.1
+        },
+        {
+          "name": "peek css-tree/cjs/definition-syntax/parse.cjs:484",
+          "ms": 487,
+          "pct": 0.1
+        },
+        {
+          "name": "requireImplForWrapper rsdom:src/generated/idl/utils.js:212",
+          "ms": 479,
+          "pct": 0.1
+        },
+        {
+          "name": "internalMatch css-tree/cjs/lexer/match.cjs:93",
+          "ms": 477,
+          "pct": 0.1
+        },
+        {
+          "name": "createDescriptor css-tree/cjs/lexer/Lexer.cjs:177",
+          "ms": 476,
+          "pct": 0.1
+        },
+        {
+          "name": "matchCompound rsdom:living/css/helpers/style-index.js:376",
+          "ms": 474,
+          "pct": 0.1
+        },
+        {
+          "name": "get rsdom:src/generated/idl/Document.js:3057",
+          "ms": 453,
+          "pct": 0.1
+        },
+        {
+          "name": "implForWrapperWithInterface rsdom:src/generated/idl/utils.js:164",
+          "ms": 421,
+          "pct": 0.1
+        },
+        {
+          "name": "parsePropertyValue rsdom:living/css/helpers/css-values.js:479",
+          "ms": 411,
+          "pct": 0.1
+        },
+        {
+          "name": "Qn @asamuzakjp/css-color/dist/esm/index.js:2519",
+          "ms": 383,
+          "pct": 0.1
+        },
+        {
+          "name": "(anonymous) @asamuzakjp/css-color/dist/esm/index.js:1",
+          "ms": 379,
+          "pct": 0.1
+        },
+        {
+          "name": "candidates rsdom:living/css/helpers/style-index.js:671",
+          "ms": 363,
+          "pct": 0.1
+        },
+        {
+          "name": "_getComputedPropertyValue rsdom:living/css/CSSStyleDeclaration-impl.js:374",
+          "ms": 342,
+          "pct": 0.1
+        },
+        {
+          "name": "(anonymous) rsdom:src/generated/css-property-descriptors.js:1",
+          "ms": 336,
+          "pct": 0.1
+        },
+        {
+          "name": "Lexer css-tree/cjs/lexer/Lexer.cjs:106",
+          "ms": 326,
+          "pct": 0.1
+        },
+        {
+          "name": "matchAsTree css-tree/cjs/lexer/match.cjs:584",
+          "ms": 317,
+          "pct": 0.1
+        },
+        {
+          "name": "clone css-tree/lib/utils/clone.js:3",
+          "ms": 316,
+          "pct": 0.1
+        },
+        {
+          "name": "filterSelector rsdom:src/js/selector.js:270",
+          "ms": 299,
+          "pct": 0.1
+        },
+        {
+          "name": "_insert rsdom:living/nodes/Node-impl.js:1105",
+          "ms": 294,
+          "pct": 0.1
+        },
+        {
+          "name": "matchAttr rsdom:living/helpers/selectors/engine.js:358",
+          "ms": 293,
+          "pct": 0.1
+        },
+        {
+          "name": "readImplicitGroup css-tree/cjs/definition-syntax/parse.cjs:391",
+          "ms": 292,
+          "pct": 0.1
+        },
+        {
+          "name": "at @asamuzakjp/css-color/dist/esm/index.js:217",
+          "ms": 286,
+          "pct": 0.1
+        },
+        {
+          "name": "(anonymous) @bramus/specificity/dist/index.cjs:1",
+          "ms": 277,
+          "pct": 0.1
+        }
+      ],
+      "nodeCoreByCaller": [
+        {
+          "name": "DOM",
+          "ms": 37370,
+          "pct": 8.7
+        },
+        {
+          "name": "test runner",
+          "ms": 14300,
+          "pct": 3.3
+        },
+        {
+          "name": "(no caller outside Node core)",
+          "ms": 13583,
+          "pct": 3.2
+        },
+        {
+          "name": "Testing Library",
+          "ms": 9584,
+          "pct": 2.2
+        },
+        {
+          "name": "React",
+          "ms": 2741,
+          "pct": 0.6
+        },
+        {
+          "name": "transform/compile",
+          "ms": 1026,
+          "pct": 0.2
+        },
+        {
+          "name": "project code + other libraries",
+          "ms": 507,
+          "pct": 0.1
+        }
+      ],
+      "topFunctionsByCategory": {
+        "DOM: loading its own modules (fs + compile)": [
+          {
+            "name": "wrapSafe node:internal/modules/cjs/loader:1819",
+            "ms": 27864,
+            "pct": 6.5
+          },
+          {
+            "name": "readFileUtf8 :0",
+            "ms": 6309,
+            "pct": 1.5
+          },
+          {
+            "name": "compileSourceTextModule node:internal/modules/esm/utils:317",
+            "ms": 4976,
+            "pct": 1.2
+          },
+          {
+            "name": "internalModuleStat :0",
+            "ms": 2780,
+            "pct": 0.6
+          },
+          {
+            "name": "realpathSync node:fs:2781",
+            "ms": 1665,
+            "pct": 0.4
+          },
+          {
+            "name": "compileForInternalLoader node:internal/bootstrap/realm:383",
+            "ms": 1590,
+            "pct": 0.4
+          },
+          {
+            "name": "__require node:internal/deps/undici/undici:5",
+            "ms": 1343,
+            "pct": 0.3
+          },
+          {
+            "name": "(anonymous) node:internal/modules/cjs/loader:1314",
+            "ms": 1279,
+            "pct": 0.3
+          },
+          {
+            "name": "(anonymous) node:internal/modules/cjs/loader:773",
+            "ms": 1243,
+            "pct": 0.3
+          },
+          {
+            "name": "normalizeString node:path:92",
+            "ms": 1151,
+            "pct": 0.3
+          },
+          {
+            "name": "(anonymous) node:internal/modules/cjs/loader:2068",
+            "ms": 991,
+            "pct": 0.2
+          },
+          {
+            "name": "open :0",
+            "ms": 811,
+            "pct": 0.2
+          }
+        ],
+        "node core": [
+          {
+            "name": "readFileUtf8 :0",
+            "ms": 6430,
+            "pct": 1.5
+          },
+          {
+            "name": "internalModuleStat :0",
+            "ms": 2203,
+            "pct": 0.5
+          },
+          {
+            "name": "realpathSync node:fs:2781",
+            "ms": 1790,
+            "pct": 0.4
+          },
+          {
+            "name": "now :0",
+            "ms": 1678,
+            "pct": 0.4
+          },
+          {
+            "name": "runMicrotasks :0",
+            "ms": 1331,
+            "pct": 0.3
+          },
+          {
+            "name": "parseChannelMessages node:internal/child_process/serialization:32",
+            "ms": 1308,
+            "pct": 0.3
+          },
+          {
+            "name": "parse :0",
+            "ms": 1237,
+            "pct": 0.3
+          },
+          {
+            "name": "compileForInternalLoader node:internal/bootstrap/realm:383",
+            "ms": 790,
+            "pct": 0.2
+          },
+          {
+            "name": "lstat :0",
+            "ms": 784,
+            "pct": 0.2
+          },
+          {
+            "name": "channel.onread node:internal/child_process:654",
+            "ms": 783,
+            "pct": 0.2
+          },
+          {
+            "name": "open :0",
+            "ms": 742,
+            "pct": 0.2
+          },
+          {
+            "name": "writeChannelMessage node:internal/child_process/serialization:78",
+            "ms": 716,
+            "pct": 0.2
+          }
+        ],
+        "transform/compile": [
+          {
+            "name": "Script node:vm:85",
+            "ms": 9439,
+            "pct": 2.2
+          },
+          {
+            "name": "wrapSafe node:internal/modules/cjs/loader:1819",
+            "ms": 8910,
+            "pct": 2.1
+          },
+          {
+            "name": "compileSourceTextModule node:internal/modules/esm/utils:317",
+            "ms": 6723,
+            "pct": 1.6
+          },
+          {
+            "name": "get vite/dist/node/module-runner.js:1297",
+            "ms": 1208,
+            "pct": 0.3
+          },
+          {
+            "name": "transformSync rolldown/dist/shared/resolve-tsconfig-DyR2RUTm.mjs:95",
+            "ms": 600,
+            "pct": 0.1
+          },
+          {
+            "name": "directRequest vite/dist/node/module-runner.js:1243",
+            "ms": 438,
+            "pct": 0.1
+          },
+          {
+            "name": "jsonParseAst rolldown/dist/shared/parse-CbPMgY6t.mjs:25",
+            "ms": 333,
+            "pct": 0.1
+          },
+          {
+            "name": "cachedRequest vite/dist/node/module-runner.js:1185",
+            "ms": 310,
+            "pct": 0.1
+          },
+          {
+            "name": "request vite/dist/node/module-runner.js:1244",
+            "ms": 300,
+            "pct": 0.1
+          },
+          {
+            "name": "getModuleInformation vite/dist/node/module-runner.js:1222",
+            "ms": 258,
+            "pct": 0.1
+          },
+          {
+            "name": "ensureModule vite/dist/node/module-runner.js:332",
+            "ms": 223,
+            "pct": 0.1
+          },
+          {
+            "name": "wrappedHook rolldown/dist/shared/normalize-string-or-regex-B7Gsiuz7.mjs:19",
+            "ms": 186,
+            "pct": 0
+          }
+        ],
+        "test runner": [
+          {
+            "name": "_runInlinedModule vitest/dist/module-evaluator.js:186",
+            "ms": 8944,
+            "pct": 2.1
+          },
+          {
+            "name": "get vitest/dist/module-evaluator.js:110",
+            "ms": 5876,
+            "pct": 1.4
+          },
+          {
+            "name": "fetchModule vitest/dist/chunks/index.k8L_ZRzq.js:740",
+            "ms": 714,
+            "pct": 0.2
+          },
+          {
+            "name": "get vitest/dist/chunks/index.k8L_ZRzq.js:1101",
+            "ms": 569,
+            "pct": 0.1
+          },
+          {
+            "name": "onMessage vitest/dist/chunks/index.DmDMHCg8.js:141",
+            "ms": 265,
+            "pct": 0.1
+          },
+          {
+            "name": "use chai/index.js:4144",
+            "ms": 254,
+            "pct": 0.1
+          },
+          {
+            "name": "populateGlobal vitest/dist/chunks/index.k8L_ZRzq.js:1080",
+            "ms": 233,
+            "pct": 0.1
+          },
+          {
+            "name": "(anonymous) vitest/dist/module-evaluator.js:130",
+            "ms": 209,
+            "pct": 0
+          },
+          {
+            "name": "invoke vitest/dist/chunks/index.k8L_ZRzq.js:444",
+            "ms": 185,
+            "pct": 0
+          },
+          {
+            "name": "addMethod chai/index.js:1695",
+            "ms": 184,
+            "pct": 0
+          },
+          {
+            "name": "fetch vitest/dist/chunks/index.DpLw24bj.js:6268",
+            "ms": 170,
+            "pct": 0
+          },
+          {
+            "name": "inlineSourceMap vitest/dist/chunks/index.DpLw24bj.js:6560",
+            "ms": 166,
+            "pct": 0
+          }
+        ],
+        "GC": [
+          {
+            "name": "(garbage collector) :0",
+            "ms": 17078,
+            "pct": 4
+          }
+        ],
+        "V8/native (unattributed)": [
+          {
+            "name": "(program) :0",
+            "ms": 4120,
+            "pct": 1
+          }
+        ],
+        "project code + other libraries": [
+          {
+            "name": "useFocusable rsdom:src/focusable/focusable.tsx:152",
+            "ms": 3434,
+            "pct": 0.8
+          },
+          {
+            "name": "useEvent rsdom:src/hooks.ts:78",
+            "ms": 2716,
+            "pct": 0.6
+          },
+          {
+            "name": "useRole rsdom:src/system.tsx:78",
+            "ms": 2608,
+            "pct": 0.6
+          },
+          {
+            "name": "useDialog rsdom:src/dialog/dialog.tsx:152",
+            "ms": 1673,
+            "pct": 0.4
+          },
+          {
+            "name": "useCompositeItem rsdom:src/composite/composite-item.tsx:109",
+            "ms": 1489,
+            "pct": 0.3
+          },
+          {
+            "name": "hasOwnProperty rsdom:src/misc.ts:116",
+            "ms": 1200,
+            "pct": 0.3
+          },
+          {
+            "name": "setState rsdom:src/index.ts:482",
+            "ms": 1180,
+            "pct": 0.3
+          },
+          {
+            "name": "createElement rsdom:src/system.tsx:48",
+            "ms": 1098,
+            "pct": 0.3
+          },
+          {
+            "name": "useCommand rsdom:src/command/command.tsx:38",
+            "ms": 957,
+            "pct": 0.2
+          },
+          {
+            "name": "removeUndefinedValues rsdom:src/misc.ts:265",
+            "ms": 937,
+            "pct": 0.2
+          },
+          {
+            "name": "useStoreState rsdom:src/index.tsx:46",
+            "ms": 858,
+            "pct": 0.2
+          },
+          {
+            "name": "useWrapElement rsdom:src/hooks.ts:287",
+            "ms": 829,
+            "pct": 0.2
+          }
+        ],
+        "DOM": [
+          {
+            "name": "exports.installInterfaces rsdom:living/interfaces.js:256",
+            "ms": 7432,
+            "pct": 1.7
+          },
+          {
+            "name": "qr @asamuzakjp/css-color/dist/esm/index.js:3072",
+            "ms": 2554,
+            "pct": 0.6
+          },
+          {
+            "name": "(anonymous) rsdom:living/css/CSSStyleProperties-impl.js:1",
+            "ms": 1879,
+            "pct": 0.4
+          },
+          {
+            "name": "mix css-tree/cjs/syntax/config/mix.cjs:38",
+            "ms": 986,
+            "pct": 0.2
+          },
+          {
+            "name": "Kt @asamuzakjp/css-color/dist/esm/index.js:1394",
+            "ms": 747,
+            "pct": 0.2
+          },
+          {
+            "name": "visit rsdom:living/css/helpers/css-values.js:164",
+            "ms": 645,
+            "pct": 0.2
+          },
+          {
+            "name": "d lru-cache/dist/esm/node/index.min.js:1",
+            "ms": 542,
+            "pct": 0.1
+          },
+          {
+            "name": "applyIndexedStyleSheetRules rsdom:living/css/helpers/computed-style.js:101",
+            "ms": 530,
+            "pct": 0.1
+          },
+          {
+            "name": "peek css-tree/cjs/definition-syntax/parse.cjs:484",
+            "ms": 487,
+            "pct": 0.1
+          },
+          {
+            "name": "requireImplForWrapper rsdom:src/generated/idl/utils.js:212",
+            "ms": 479,
+            "pct": 0.1
+          },
+          {
+            "name": "internalMatch css-tree/cjs/lexer/match.cjs:93",
+            "ms": 477,
+            "pct": 0.1
+          },
+          {
+            "name": "createDescriptor css-tree/cjs/lexer/Lexer.cjs:177",
+            "ms": 476,
+            "pct": 0.1
+          }
+        ],
+        "other": [
+          {
+            "name": "wasm-function[29] wasm://wasm/f231682e:1",
+            "ms": 17,
+            "pct": 0
+          },
+          {
+            "name": "wasm-function[56] wasm://wasm/f231682e:1",
+            "ms": 3,
+            "pct": 0
+          },
+          {
+            "name": "wasm-function[38] wasm://wasm/f231682e:1",
+            "ms": 2,
+            "pct": 0
+          },
+          {
+            "name": "wasm-function[49] wasm://wasm/f231682e:1",
+            "ms": 1,
+            "pct": 0
+          },
+          {
+            "name": "wasm-function[32] wasm://wasm/f231682e:1",
+            "ms": 1,
+            "pct": 0
+          },
+          {
+            "name": "wasm-function[60] wasm://wasm/f231682e:1",
+            "ms": 1,
+            "pct": 0
+          },
+          {
+            "name": "wasm-function[8] wasm://wasm/f231682e:1",
+            "ms": 1,
+            "pct": 0
+          },
+          {
+            "name": "wasm-function[36] wasm://wasm/f231682e:1",
+            "ms": 1,
+            "pct": 0
+          },
+          {
+            "name": "wasm-function[33] wasm://wasm/f231682e:1",
+            "ms": 1,
+            "pct": 0
+          },
+          {
+            "name": "wasm-function[19] wasm://wasm/f231682e:1",
+            "ms": 1,
+            "pct": 0
+          },
+          {
+            "name": "wasm-function[57] wasm://wasm/f231682e:1",
+            "ms": 1,
+            "pct": 0
+          },
+          {
+            "name": "wasm-function[30] wasm://wasm/f231682e:1",
+            "ms": 1,
+            "pct": 0
+          }
+        ],
+        "Testing Library": [
+          {
+            "name": "_loop aria-query/lib/rolesMap.js:33",
+            "ms": 303,
+            "pct": 0.1
+          },
+          {
+            "name": "_loop aria-query/lib/rolesMap.js:34",
+            "ms": 296,
+            "pct": 0.1
+          },
+          {
+            "name": "computeTextAlternative dom-accessibility-api/dist/accessible-name-and-description.js:400",
+            "ms": 220,
+            "pct": 0.1
+          },
+          {
+            "name": "(anonymous) aria-query/lib/rolesMap.js:35",
+            "ms": 179,
+            "pct": 0
+          },
+          {
+            "name": "get aria-query/lib/rolesMap.js:89",
+            "ms": 158,
+            "pct": 0
+          },
+          {
+            "name": "queryAllByRole @testing-library/dom/dist/queries/role.js:15",
+            "ms": 154,
+            "pct": 0
+          },
+          {
+            "name": "isElement dom-accessibility-api/dist/util.js:25",
+            "ms": 151,
+            "pct": 0
+          },
+          {
+            "name": "createEvent @testing-library/dom/dist/events.js:22",
+            "ms": 139,
+            "pct": 0
+          },
+          {
+            "name": "(anonymous) aria-query/lib/elementRoleMap.js:28",
+            "ms": 119,
+            "pct": 0
+          },
+          {
+            "name": "(anonymous) aria-query/lib/rolesMap.js:22",
+            "ms": 117,
+            "pct": 0
+          },
+          {
+            "name": "(anonymous) aria-query/lib/rolesMap.js:21",
+            "ms": 113,
+            "pct": 0
+          },
+          {
+            "name": "(anonymous) aria-query/lib/rolesMap.js:90",
+            "ms": 105,
+            "pct": 0
+          }
+        ],
+        "React": [
+          {
+            "name": "process.env.NODE_ENV.exports.jsxDEV react/cjs/react-jsx-dev-runtime.development.js:327",
+            "ms": 39472,
+            "pct": 9.2
+          },
+          {
+            "name": "ReactElement react/cjs/react-jsx-dev-runtime.development.js:155",
+            "ms": 10426,
+            "pct": 2.4
+          },
+          {
+            "name": "jsxDEVImpl react/cjs/react-jsx-dev-runtime.development.js:198",
+            "ms": 1636,
+            "pct": 0.4
+          },
+          {
+            "name": "commitHookEffectListUnmount react-dom/cjs/react-dom-client.development.js:13795",
+            "ms": 1191,
+            "pct": 0.3
+          },
+          {
+            "name": "getComponentNameFromType react/cjs/react-jsx-dev-runtime.development.js:14",
+            "ms": 1014,
+            "pct": 0.2
+          },
+          {
+            "name": "commitMutationEffectsOnFiber react-dom/cjs/react-dom-client.development.js:15797",
+            "ms": 923,
+            "pct": 0.2
+          },
+          {
+            "name": "commitHookEffectListMount react-dom/cjs/react-dom-client.development.js:13735",
+            "ms": 825,
+            "pct": 0.2
+          },
+          {
+            "name": "updateEffectImpl react-dom/cjs/react-dom-client.development.js:9025",
+            "ms": 822,
+            "pct": 0.2
+          },
+          {
+            "name": "beginWork react-dom/cjs/react-dom-client.development.js:12052",
+            "ms": 787,
+            "pct": 0.2
+          },
+          {
+            "name": "validateProperty react-dom/cjs/react-dom-client.development.js:3079",
+            "ms": 760,
+            "pct": 0.2
+          },
+          {
+            "name": "runWithFiberInDEV react-dom/cjs/react-dom-client.development.js:1040",
+            "ms": 668,
+            "pct": 0.2
+          },
+          {
+            "name": "completeWork react-dom/cjs/react-dom-client.development.js:12883",
+            "ms": 645,
+            "pct": 0.2
+          }
+        ]
+      },
+      "processes": [
+        {
+          "file": "37028-1791905075354.cpuprofile",
+          "cpuMs": 17984
+        },
+        {
+          "file": "37081-1791905118482.cpuprofile",
+          "cpuMs": 10441
+        },
+        {
+          "file": "36966-1791905346986.cpuprofile",
+          "cpuMs": 9768
+        },
+        {
+          "file": "37029-1791905061876.cpuprofile",
+          "cpuMs": 8761
+        },
+        {
+          "file": "37063-1791905086492.cpuprofile",
+          "cpuMs": 7498
+        },
+        {
+          "file": "37062-1791905088135.cpuprofile",
+          "cpuMs": 7494
+        },
+        {
+          "file": "37073-1791905108585.cpuprofile",
+          "cpuMs": 7117
+        },
+        {
+          "file": "37082-1791905113927.cpuprofile",
+          "cpuMs": 5959
+        },
+        {
+          "file": "37068-1791905097619.cpuprofile",
+          "cpuMs": 5893
+        },
+        {
+          "file": "37131-1791905153360.cpuprofile",
+          "cpuMs": 5694
+        },
+        {
+          "file": "37194-1791905189538.cpuprofile",
+          "cpuMs": 4880
+        },
+        {
+          "file": "37030-1791905045588.cpuprofile",
+          "cpuMs": 4438
+        }
+      ]
+    }
+  }
+]

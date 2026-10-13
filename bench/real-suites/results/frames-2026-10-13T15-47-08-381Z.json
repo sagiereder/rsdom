@@ -1,0 +1,92 @@
+[
+  {
+    "name": "radix-primitives",
+    "impl": "jsdom30",
+    "wallMs": 17797,
+    "files": 46,
+    "envMs": 38062,
+    "framePendingMs": 4022,
+    "rafCalls": 544,
+    "framePendingPct": 10.6
+  },
+  {
+    "name": "radix-primitives",
+    "impl": "rsdom",
+    "wallMs": 17314,
+    "files": 46,
+    "envMs": 42046,
+    "framePendingMs": 3516,
+    "rafCalls": 546,
+    "framePendingPct": 8.4
+  },
+  {
+    "name": "radix-primitives",
+    "impl": "happy-dom",
+    "wallMs": 12545,
+    "files": 46,
+    "envMs": 29918,
+    "framePendingMs": 1587,
+    "rafCalls": 561,
+    "framePendingPct": 5.3
+  },
+  {
+    "name": "ariakit",
+    "impl": "jsdom30",
+    "wallMs": 259760,
+    "files": 251,
+    "envMs": 882613,
+    "framePendingMs": 591060,
+    "rafCalls": 61222,
+    "framePendingPct": 67
+  },
+  {
+    "name": "ariakit",
+    "impl": "rsdom",
+    "wallMs": 283096,
+    "files": 251,
+    "envMs": 974414,
+    "framePendingMs": 568025,
+    "rafCalls": 61216,
+    "framePendingPct": 58.3
+  },
+  {
+    "name": "ariakit",
+    "impl": "happy-dom",
+    "wallMs": 368172,
+    "files": 248,
+    "envMs": 352828,
+    "framePendingMs": 292,
+    "rafCalls": 18,
+    "framePendingPct": 0.1
+  },
+  {
+    "name": "react-redux",
+    "impl": "jsdom30",
+    "wallMs": 3482,
+    "files": 14,
+    "envMs": 3806,
+    "framePendingMs": 0,
+    "rafCalls": 0,
+    "framePendingPct": 0
+  },
+  {
+    "name": "react-redux",
+    "impl": "rsdom",
+    "wallMs": 2956,
+    "files": 14,
+    "envMs": 4249,
+    "framePendingMs": 0,
+    "rafCalls": 0,
+    "framePendingPct": 0
+  },
+  {
+    "name": "react-redux",
+    "impl": "happy-dom",
+    "wallMs": 2259,
+    "files": 14,
+    "envMs": 3763,
+    "framePendingMs": 0,
+    "rafCalls": 0,
+    "framePendingPct": 0
+  }
+]
